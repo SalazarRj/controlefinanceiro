@@ -1,0 +1,2509 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#3b82f6">
+    <title>Central de Controle Financeiro PRO</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f0f2f5; }
+        .modal-backdrop { transition: opacity 0.3s ease; }
+        .modal { transition: opacity 0.3s ease, transform 0.3s ease; }
+        .summary-card:hover, .settings-card:hover { transform: translateY(-5px); }
+        .error-message { color: #ef4444; font-size: 0.875rem; margin-top: 0.25rem; }
+        .tab-active { border-color: #3b82f6; color: #3b82f6; }
+        .tab-inactive { border-color: transparent; color: #6b7280; }
+        .transaction-paid { opacity: 0.6; }
+        .transaction-paid .description { text-decoration: line-through; }
+        .filter-btn-active { background-color: #3b82f6; color: white; }
+        #main-app, #auth-container { display: none; }
+        .loader {
+            width: 48px;
+            height: 48px;
+            border: 5px solid #FFF;
+            border-bottom-color: #3b82f6;
+            border-radius: 50%;
+            display: inline-block;
+            box-sizing: border-box;
+            animation: rotation 1s linear infinite;
+        }
+        @keyframes rotation {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Estilos para cards e listas */
+        .invoice-card { 
+            background-color: white;
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+            position: relative;
+            overflow: hidden;
+        }
+        .invoice-card:hover { 
+            transform: translateY(-4px); 
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+        .invoice-list {
+            max-height: 180px;
+            overflow-y: auto;
+            transition: max-height 0.5s ease-in-out;
+        }
+        .invoice-list.expanded {
+            max-height: 500px;
+        }
+        .sort-btn.active {
+            color: #3b82f6;
+            font-weight: 600;
+        }
+        .paid-stamp {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background-color: #10b981; /* green-500 */
+            color: white;
+            padding: 1.5rem 0.5rem 0.5rem 1.5rem;
+            font-weight: 800;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            transform: rotate(45deg) translate(25%, -50%);
+            transform-origin: center;
+            width: 120px;
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .collapsible-content {
+            max-height: 1000px; /* Adjust as needed */
+            overflow: hidden;
+            transition: max-height 0.5s ease-in-out;
+        }
+        .collapsible-content.collapsed {
+            max-height: 0;
+        }
+        .table-scrollable, .faturas-scrollable {
+            max-height: 70vh;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #94a3b8 #f1f5f9;
+        }
+        .table-scrollable::-webkit-scrollbar, .faturas-scrollable::-webkit-scrollbar {
+            width: 8px;
+        }
+        .table-scrollable::-webkit-scrollbar-track, .faturas-scrollable::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 10px;
+        }
+        .table-scrollable::-webkit-scrollbar-thumb, .faturas-scrollable::-webkit-scrollbar-thumb {
+            background-color: #94a3b8;
+            border-radius: 10px;
+            border: 2px solid #f1f5f9;
+        }
+        input[type="radio"]:checked + .env-label {
+            background-color: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+            z-index: 10;
+        }
+    </style>
+</head>
+<script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/public/service-worker.js')
+          .then(reg => console.log('Service Worker registrado:', reg.scope))
+          .catch(err => console.error('Erro no Service Worker:', err));
+      });
+    }
+  </script>
+<body class="bg-gray-100">
+
+    <!-- Tela de Carregamento -->
+    <div id="loading-container" class="min-h-screen flex flex-col items-center justify-center bg-gray-50">
+        <div class="loader"></div>
+        <p class="mt-4 text-gray-600">Carregando...</p>
+    </div>
+
+    <!-- Tela de Autenticação -->
+    <div id="auth-container" class="min-h-screen items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-md w-full space-y-8">
+            <div>
+                <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
+                    Controle Financeiro Salazar
+                </h2>
+                <p class="mt-2 text-center text-sm text-gray-600">
+                    Faça login ou crie sua conta
+                </p>
+            </div>
+
+            <div class="bg-white p-8 rounded-xl shadow-lg">
+                <div class="mb-6 text-center">
+                    <span class="text-sm font-medium text-gray-900 mr-4">Ambiente:</span>
+                    <div class="inline-flex rounded-md shadow-sm" role="group">
+                        <input type="radio" name="firebase-env" id="env-prd" value="prd" class="hidden" checked>
+                        <label for="env-prd" class="env-label cursor-pointer rounded-l-lg px-4 py-2 text-sm font-medium text-gray-900 bg-white border border-gray-200 hover:bg-gray-100">
+                            Produção
+                        </label>
+                        
+                        <input type="radio" name="firebase-env" id="env-hml" value="hml" class="hidden">
+                        <label for="env-hml" class="env-label cursor-pointer rounded-r-lg px-4 py-2 text-sm font-medium text-gray-900 bg-white border border-gray-200 hover:bg-gray-100">
+                            Homologação
+                        </label>
+                    </div>
+                </div>
+
+                <div class="flex border-b border-gray-200">
+                    <button id="login-tab-btn" class="w-1/2 py-4 text-center font-medium text-blue-600 border-b-2 border-blue-600">Login</button>
+                    <button id="register-tab-btn" class="w-1/2 py-4 text-center font-medium text-gray-500 hidden">Cadastro</button>
+                </div>
+                <form id="login-form" class="mt-8 space-y-6">
+                    <div class="rounded-md shadow-sm -space-y-px">
+                        <div>
+                            <label for="login-email" class="sr-only">Email</label>
+                            <input id="login-email" name="email" type="email" autocomplete="email" required class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm" placeholder="Endereço de email">
+                        </div>
+                        <div>
+                            <label for="login-password" class="sr-only">Senha</label>
+                            <input id="login-password" name="password" type="password" autocomplete="current-password" required class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm" placeholder="Senha">
+                        </div>
+                    </div>
+                    <p id="login-error" class="text-red-500 text-sm mt-2"></p>
+                    <div>
+                        <button type="submit" class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                            Entrar
+                        </button>
+                    </div>
+                </form>
+                <form id="register-form" class="mt-8 space-y-6 hidden">
+                     <div class="rounded-md shadow-sm -space-y-px">
+                        <div>
+                            <label for="register-email" class="sr-only">Email</label>
+                            <input id="register-email" name="email" type="email" autocomplete="email" required class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm" placeholder="Endereço de email">
+                        </div>
+                        <div>
+                            <label for="register-password" class="sr-only">Senha</label>
+                            <input id="register-password" name="password" type="password" autocomplete="new-password" required class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm" placeholder="Senha (mínimo 6 caracteres)">
+                        </div>
+                    </div>
+                    <p id="register-error" class="text-red-500 text-sm mt-2"></p>
+                    <div>
+                        <button type="submit" class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                            Criar Conta
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- App Principal -->
+    <div id="main-app" class="container mx-auto p-4 md:p-8 max-w-7xl">
+        <header class="mb-8 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div><h1 class="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-800 text-center sm:text-left">Central de Controle</h1><p class="text-gray-500 mt-1 text-center sm:text-left">Sua vida financeira organizada.</p></div>
+            <div class="flex items-center gap-4">
+                 <button id="openCadastroHubBtn" class="text-gray-500 hover:text-blue-600 transition duration-300 p-2 rounded-full hover:bg-gray-200" title="Cadastros"><i class="fa-solid fa-edit fa-2x"></i></button>
+                 <button id="openOptionsBtn" class="text-gray-500 hover:text-blue-600 transition duration-300 p-2 rounded-full hover:bg-gray-200" title="Opções"><i class="fa-solid fa-gear fa-2x"></i></button>
+                 <button id="openReportBtn" class="text-gray-500 hover:text-blue-600 transition duration-300 p-2 rounded-full hover:bg-gray-200">
+                    <i class="fa-solid fa-chart-line fa-2x"></i>
+                 </button>
+                 <button id="logoutBtn" class="text-gray-500 hover:text-red-600 transition duration-300 p-2 rounded-full hover:bg-gray-200" title="Sair"><i class="fa-solid fa-right-from-bracket fa-lg"></i></button>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
+            <div class="summary-card bg-white p-5 rounded-xl shadow-md border-l-4 border-green-500 transition-all flex flex-col justify-between"><p class="text-sm font-medium text-gray-500">Receitas do Mês</p><p id="summary-receitas" class="text-2xl font-bold text-gray-800 text-right">R$ 0,00</p></div>
+            <div class="summary-card bg-white p-5 rounded-xl shadow-md border-l-4 border-red-500 transition-all flex flex-col justify-between"><p class="text-sm font-medium text-gray-500">Despesas do Mês</p><p id="summary-despesas" class="text-2xl font-bold text-gray-800 text-right">R$ 0,00</p></div>
+            <div class="summary-card bg-white p-5 rounded-xl shadow-md border-l-4 border-blue-500 transition-all flex flex-col justify-between"><p class="text-sm font-medium text-gray-500">Investimentos do Mês</p><p id="summary-investimentos" class="text-2xl font-bold text-gray-800 text-right">R$ 0,00</p></div>
+            <div class="summary-card bg-gray-800 text-white p-5 rounded-xl shadow-lg transition-all flex flex-col justify-between"><p class="text-sm font-medium text-gray-300">Saldo do Mês</p><p id="summary-saldo" class="text-2xl font-bold text-right">R$ 0,00</p></div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-md p-4 md:p-6">
+            <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
+                <div class="flex items-center gap-2">
+                    <button id="prev-month-btn" class="p-2 rounded-full hover:bg-gray-200"><i class="fa-solid fa-chevron-left"></i></button>
+                    <h2 id="current-month-display" class="text-xl font-bold text-gray-800 text-center w-48"></h2>
+                    <button id="today-btn" class="p-2 rounded-full hover:bg-gray-200" title="Mês Atual"><i class="fa-solid fa-calendar-day"></i></button>
+                    <button id="next-month-btn" class="p-2 rounded-full hover:bg-gray-200"><i class="fa-solid fa-chevron-right"></i></button>
+                </div>
+                <div class="w-full md:w-auto flex-grow flex justify-center">
+                     <div class="border-b border-gray-200">
+                         <nav class="-mb-px flex space-x-6" aria-label="Tabs">
+                             <button id="tab-lancamentos" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm tab-active">Lançamentos</button>
+                             <button id="tab-faturas" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm tab-inactive">Faturas e Contas</button>
+                         </nav>
+                     </div>
+                </div>
+                <div class="flex gap-2">                    
+                    <button id="addTransactionBtn" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 hover:bg-blue-700 transition-all shadow-md hover:shadow-lg"><i class="fa fa-plus"></i> Adicionar</button>
+                     <button id="toggle-grouping-btn"
+                        name="btnAgrupar hidden"
+                        class="hidden bg-blue-600 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 hover:bg-blue-700 transition-all shadow-md hover:shadow-lg">
+                        Separar Contas
+                    </button>
+                </div>
+            </div>
+
+            <div id="tab-content-lancamentos">
+                <div class="mb-8">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-lg font-semibold text-gray-700"><i class="fa-solid fa-arrow-up text-green-500 mr-2"></i>Receitas</h3>
+                        <button class="toggle-collapse-btn p-2 rounded-full hover:bg-gray-100" data-target="income-section">
+                            <i class="fa-solid fa-chevron-up"></i>
+                        </button>
+                    </div>
+                    <div id="income-section" class="collapsible-content">
+                        <div id="income-table-container" class="overflow-x-auto">
+                            <table class="w-full text-sm text-left text-gray-500">
+                                <thead class="text-xs text-gray-700 uppercase bg-gray-50"><tr><th scope="col" class="px-6 py-3">Descrição</th><th scope="col" class="px-6 py-3">Data</th><th scope="col" class="px-6 py-3">Categoria</th><th scope="col" class="px-6 py-3 text-right">Valor</th><th scope="col" class="px-6 py-3 text-center">Ações</th></tr></thead>
+                                <tbody id="income-table-body"></tbody>
+                                <tfoot id="income-table-footer" class="bg-gray-50 font-semibold"></tfoot>
+                            </table>
+                            <div id="empty-state-income" class="text-center py-10 hidden"><i class="fa-solid fa-dollar-sign fa-3x text-gray-300 mb-4"></i><p class="text-gray-500">Nenhuma receita para este mês.</p></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="flex flex-col sm:flex-row justify-between items-center mb-2 gap-4">
+                        <div class="flex items-center gap-3">
+                            <h3 class="text-lg font-semibold text-gray-700"><i class="fa-solid fa-arrow-down text-red-500 mr-2"></i>Despesas e Investimentos</h3>
+                            <button id="share-unpaid-btn" class="text-green-500 hover:text-green-600" title="Compartilhar Despesas não Pagas no WhatsApp">
+                                <i class="fa-brands fa-whatsapp fa-lg"></i>
+                            </button>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div id="filter-container" class="flex items-center gap-2 bg-gray-100 p-1 rounded-lg">
+                                <button data-filter="todas" class="filter-btn px-3 py-1 text-sm font-medium rounded-md filter-btn-active">Todas</button>
+                                <button data-filter="nao-pagas" class="filter-btn px-3 py-1 text-sm font-medium rounded-md text-gray-600">Não Pagas</button>
+                                <button data-filter="pagas" class="filter-btn px-3 py-1 text-sm font-medium rounded-md text-gray-600">Pagas</button>
+                            </div>
+                            <button class="toggle-collapse-btn p-2 rounded-full hover:bg-gray-100" data-target="expense-section">
+                                <i class="fa-solid fa-chevron-up"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="expense-section" class="collapsible-content">
+                         <!-- CONTROLES DE ORDENAÇÃO COM UX MELHORADO -->
+                        <div id="expense-sort-container" class="flex items-center justify-start gap-2 my-4">
+                            <span class="text-sm font-medium text-gray-600 mr-2">Ordenar por:</span>
+                            <button data-sort="data" class="expense-sort-btn flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-full transition-all duration-200">Data</button>
+                            <button data-sort="descricao" class="expense-sort-btn flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-full transition-all duration-200">Descrição</button>
+                            <button data-sort="valor" class="expense-sort-btn flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-full transition-all duration-200">Valor</button>
+                        </div>
+
+                         <div id="bulk-actions-container" class="my-2 hidden flex-wrap gap-2">
+                             <button id="quit-open-btn" class="bg-green-500 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 hover:bg-green-600 transition-all shadow-sm hidden"><i class="fa fa-check-double"></i></button>
+                             <button id="reverse-paid-btn" class="bg-orange-500 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 hover:bg-orange-600 transition-all shadow-sm hidden"><i class="fa-solid fa-receipt"></i></button>
+                         </div>
+                        <div id="expense-table-container" class="overflow-x-auto">
+                            <table class="w-full text-sm text-left text-gray-500">
+                                <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                                    <tr>
+                                        <th scope="col" class="px-6 py-3"><input type="checkbox" id="select-all-expenses-checkbox"></th>
+                                        <th scope="col" class="px-6 py-3">Transação</th>
+                                        <th scope="col" class="px-6 py-3">Data</th>
+                                        <th scope="col" class="px-6 py-3">Última Parcela</th>
+                                        <th scope="col" class="px-6 py-3">Categoria</th>
+                                        <th scope="col" class="px-6 py-3">Cartão</th>
+                                        <th scope="col" class="px-6 py-3 text-right">Valor</th>
+                                        <th scope="col" class="px-6 py-3 text-center">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="expense-table-body"></tbody>
+                                <tfoot id="expense-table-footer" class="bg-gray-50 font-semibold"></tfoot>
+                            </table>
+                             <div id="empty-state-expenses" class="text-center py-10 hidden"><i class="fa-solid fa-receipt fa-3x text-gray-300 mb-4"></i><p class="text-gray-500">Nenhuma despesa para este mês.</p></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-content-faturas" class="hidden">
+                 <div class="faturas-scrollable">
+                    <div id="faturas-view-content" class="p-2 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+                 </div>
+                 <div id="empty-state-faturas" class="text-center py-10"><i class="fa-solid fa-file-invoice-dollar fa-3x text-gray-300 mb-4"></i><p class="text-gray-500">Nenhuma fatura ou conta para este mês.</p></div>
+            </div>
+        </div>
+    </div>
+   
+    <div id="modalBackdrop" class="modal-backdrop fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 z-40 hidden"></div>
+    
+    <div id="settingsHubModal" class="modal fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-2xl w-11/12 md:max-w-lg z-50 hidden"></div>
+    <div id="addEditTransactionModal" class="modal fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-2xl w-11/12 md:max-w-md z-50 hidden"></div>
+    <div id="deleteConfirmModal" class="modal fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-2xl w-11/12 max-w-md z-50 hidden"></div>
+    <div id="editRecurringConfirmModal" class="modal fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-2xl w-11/12 max-w-md z-50 hidden"></div>
+    <div id="creditCardsModal" class="modal fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-2xl w-11/12 md:max-w-lg z-50 hidden"></div>
+    <div id="typesModal" class="modal fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-2xl w-11/12 md:max-w-lg z-50 hidden"></div>
+    <div id="categoriesModal" class="modal fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-2xl w-11/12 md:max-w-lg z-50 hidden"></div>
+    <!-- MODAL DE CONFIRMAÇÃO GENÉRICO -->
+    <div id="genericConfirmModal" class="modal fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-2xl w-11/12 max-w-md z-50 hidden"></div>
+    <!-- MODAL ESTORNO -->
+    <div id="reversalModal" class="modal fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-2xl w-11/12 max-w-sm z-50 hidden">
+        <div class="p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-gray-800">Lançar Estorno</h3>
+                <button class="close-modal-btn text-gray-400 hover:text-gray-600"><i class="fa fa-times fa-lg"></i></button>
+            </div>
+            <form id="reversal-form" novalidate>
+                 <input type="hidden" name="cardId" value="">
+                 <div class="mb-4">
+                    <label for="reversal-descricao" class="block text-sm font-medium text-gray-700 mb-1">Descrição do Estorno</label>
+                    <input type="text" id="reversal-descricao" name="descricao" class="w-full px-3 py-2 border border-gray-300 rounded-lg" required value="Estorno de Compra">
+                 </div>
+                 <div class="mb-6">
+                    <label for="reversal-valor" class="block text-sm font-medium text-gray-700 mb-1">Valor do Crédito</label>
+                    <input type="text" id="reversal-valor" name="valor" inputmode="decimal" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="R$ 0,00" required>
+                 </div>
+                <div class="flex justify-end gap-3">
+                    <button type="button" class="close-modal-btn w-full bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-300">Cancelar</button>
+                    <button type="submit" class="w-full bg-green-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-600">Lançar Crédito</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <!-- MODAL WHATSAPP -->
+    <div id="whatsappModal" class="modal fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-2xl w-11/12 max-w-sm z-50 hidden">
+        <div class="p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-gray-800">Enviar Fatura</h3>
+                <button class="close-modal-btn text-gray-400 hover:text-gray-600"><i class="fa fa-times fa-lg"></i></button>
+            </div>
+            <form id="whatsapp-form">
+                <p class="text-sm text-gray-600 mb-4">Digite o número do WhatsApp para compartilhar o resumo da fatura (incluindo o código do país, ex: 5521999999999).</p>
+                <input type="tel" id="whatsapp-phone" name="phone" class="w-full px-3 py-2 border border-gray-300 rounded-lg mb-4" placeholder="5521..." required>
+                <div class="flex justify-end gap-3">
+                    <button type="button" class="close-modal-btn w-full bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-300">Cancelar</button>
+                    <button type="submit" class="w-full bg-green-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-600">Enviar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initFirebase } from './firebase-config.js';
+        import { 
+            getAuth, 
+            onAuthStateChanged, 
+            createUserWithEmailAndPassword, 
+            signInWithEmailAndPassword, 
+            signOut,
+            setPersistence,
+            browserLocalPersistence
+        } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-auth.js";
+        import { 
+            getFirestore, 
+            collection, 
+            doc, 
+            getDoc, 
+            setDoc, 
+            addDoc, 
+            getDocs, 
+            deleteDoc, 
+            updateDoc,
+            query,
+            where
+        } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore.js";
+
+        let auth, db;
+        let transactions = [];
+        let settings = {};
+        let currentUser = null;
+        let transactionToEditOrDelete = null;
+        let currentDate = new Date();
+        let currentFilter = 'todas';
+        let expenseSortState = { key: 'data', order: 'asc' };
+        let selectedTransactionIds = [];
+        let unifiedView = true;
+        let ocultoCardDespesasGerais = false;
+        let invoiceSortState = {};
+        let whatsappShareData = null; 
+        
+        const loadingContainer = document.getElementById('loading-container');
+        const authContainer = document.getElementById('auth-container');
+        const mainAppContainer = document.getElementById('main-app');
+        const loginForm = document.getElementById('login-form');
+        const registerForm = document.getElementById('register-form');
+        const loginTabBtn = document.getElementById('login-tab-btn');
+        const registerTabBtn = document.getElementById('register-tab-btn');
+        const loginErrorEl = document.getElementById('login-error');
+        const registerErrorEl = document.getElementById('register-error');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const envRadios = document.querySelectorAll('input[name="firebase-env"]');
+
+        const allModals = document.querySelectorAll('.modal');
+        const modalBackdrop = document.getElementById('modalBackdrop');
+        const openCadastroHubBtn = document.getElementById('openCadastroHubBtn');
+        const openOptionsBtn = document.getElementById('openOptionsBtn');
+        const addTransactionBtn = document.getElementById('addTransactionBtn');
+        const prevMonthBtn = document.getElementById('prev-month-btn');
+        const nextMonthBtn = document.getElementById('next-month-btn');
+        const todayBtn = document.getElementById('today-btn');
+        const currentMonthDisplay = document.getElementById('current-month-display');
+        const incomeTableBody = document.getElementById('income-table-body');
+        const incomeTableFooter = document.getElementById('income-table-footer');
+        const expenseTableBody = document.getElementById('expense-table-body');
+        const expenseTableFooter = document.getElementById('expense-table-footer');
+        const expenseSortContainer = document.getElementById('expense-sort-container');
+        const emptyStateIncome = document.getElementById('empty-state-income');
+        const emptyStateExpenses = document.getElementById('empty-state-expenses');
+        const emptyStateFaturas = document.getElementById('empty-state-faturas');
+        const faturasViewContent = document.getElementById('faturas-view-content');
+        const tabLancamentos = document.getElementById('tab-lancamentos');
+        const tabFaturas = document.getElementById('tab-faturas');
+        const btnAgrupar = document.getElementById('toggle-grouping-btn');
+        const tabContentLancamentos = document.getElementById('tab-content-lancamentos');
+        const tabContentFaturas = document.getElementById('tab-content-faturas');
+        const filterContainer = document.getElementById('filter-container');
+        const bulkActionsContainer = document.getElementById('bulk-actions-container');
+        const quitOpenBtn = document.getElementById('quit-open-btn');
+        const reversePaidBtn = document.getElementById('reverse-paid-btn');
+        const selectAllExpensesCheckbox = document.getElementById('select-all-expenses-checkbox');
+        
+        const defaultSettings = {
+            tipos: [
+                { id: 1, name: 'Salário', main: 'Receita' }, 
+                { id: 2, name: 'Aluguel', main: 'Despesa' }, 
+                { id: 3, name: 'Internet', main: 'Despesa' }, 
+                { id: 4, name: 'Compras', main: 'Despesa' },
+                { id: 5, name: 'Lazer', main: 'Despesa' },
+                { id: 6, name: 'Investimento', main: 'Investimento' },
+                { id: 7, name: 'Anuidade', main: 'Despesa' },
+                { id: 8, name: 'Estorno', main: 'Estorno' },
+            ],
+            categorias: { 
+                '1': ['Salário', 'Outras Receitas'], 
+                '2': ['Moradia'], 
+                '3': ['Contas', 'Assinaturas'], 
+                '4': ['Mercado'], 
+                '5': ['Lazer'], 
+                '7': ['Anuidade'], 
+                '6': ['Ações', 'Renda Fixa'], 
+                '8': ['Estorno Cartão'],
+            },
+            cartoes: [
+                {id: 9001, name: "Azul", bandeira: "Visa", diaVencimento: 15, temAnuidade: false, valorAnuidade: 0, parcelasAnuidade: 0},
+                {id: 9002, name: "Smile", bandeira: "Mastercard", diaVencimento: 9, temAnuidade: false, valorAnuidade: 0, parcelasAnuidade: 0}
+            ]
+        };
+
+        loginTabBtn.addEventListener('click', () => {
+            loginForm.classList.remove('hidden');
+            registerForm.classList.add('hidden');
+            loginTabBtn.classList.add('text-blue-600', 'border-blue-600');
+            loginTabBtn.classList.remove('text-gray-500');
+            registerTabBtn.classList.add('text-gray-500');
+            registerTabBtn.classList.remove('text-blue-600', 'border-blue-600');
+        });
+
+        registerTabBtn.addEventListener('click', () => {
+            registerForm.classList.remove('hidden');
+            loginForm.classList.add('hidden');
+            registerTabBtn.classList.add('text-blue-600', 'border-blue-600');
+            registerTabBtn.classList.remove('text-gray-500');
+            loginTabBtn.classList.add('text-gray-500');
+            loginTabBtn.classList.remove('text-blue-600', 'border-blue-600');
+        });
+
+        loginForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = loginForm.email.value;
+            const password = loginForm.password.value;
+            loginErrorEl.textContent = '';
+            signInWithEmailAndPassword(auth, email, password)
+                .catch(error => {
+                    console.error("Erro de login:", error);
+                    loginErrorEl.textContent = "Email ou senha inválidos.";
+                });
+        });
+
+        registerForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = registerForm.email.value;
+            const password = registerForm.password.value;
+            registerErrorEl.textContent = '';
+            createUserWithEmailAndPassword(auth, email, password)
+                .then(userCredential => {
+                    const user = userCredential.user;
+                    const settingsDocRef = doc(db, 'users', user.uid, 'data', 'settings');
+                    return setDoc(settingsDocRef, defaultSettings);
+                })
+                .catch(error => {
+                    console.error("Erro de cadastro:", error);
+                    if (error.code === 'auth/weak-password') {
+                        registerErrorEl.textContent = 'A senha deve ter pelo menos 6 caracteres.';
+                    } else if (error.code === 'auth/email-already-in-use') {
+                        registerErrorEl.textContent = 'Este email já está em uso.';
+                    } else {
+                        registerErrorEl.textContent = 'Ocorreu um erro ao criar a conta.';
+                    }
+                });
+        });
+
+        logoutBtn.addEventListener('click', () => {
+            if (auth) {
+                signOut(auth).catch(error => console.error("Erro ao sair:", error));
+            }
+        });
+
+        async function loadUserData() {
+            if (!currentUser || !db) return;
+            
+            const settingsDocRef = doc(db, 'users', currentUser.uid, 'data', 'settings');
+            const settingsDoc = await getDoc(settingsDocRef);
+            if (settingsDoc.exists()) {
+                settings = settingsDoc.data();
+            } else {
+                await setDoc(settingsDocRef, defaultSettings);
+                settings = defaultSettings;
+            }
+
+            const transactionsColRef = collection(db, 'users', currentUser.uid, 'transactions');
+            const querySnapshot = await getDocs(transactionsColRef);
+            transactions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        }
+
+        const saveSettings = async () => {
+            if (!currentUser || !db) return;
+            const settingsDocRef = doc(db, 'users', currentUser.uid, 'data', 'settings');
+            await setDoc(settingsDocRef, settings);
+        };
+        
+        const formatCurrency = (value) => !isNaN(value) ? value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : "R$ 0,00";
+        const parseCurrency = (valueStr) => parseFloat((valueStr || '0').replace(/\./g, '').replace(',', '.'));
+        const findTypeBy = (key, value) => settings.tipos.find(t => t[key] == value);
+
+        const getTransactionsForMonth = (date) => {
+            return transactions.filter(t => {
+                const tDate = new Date(t.data + 'T00:00:00');
+                return tDate.getFullYear() === date.getFullYear() && tDate.getMonth() === date.getMonth();
+            });
+        };
+        
+        const updateBulkActionsUI = () => {
+            const selectedTransactions = selectedTransactionIds.map(id => transactions.find(t => t.id === id)).filter(Boolean);
+            const unpaidCount = selectedTransactions.filter(t => !t.pago).length;
+            const paidCount = selectedTransactions.filter(t => t.pago && findTypeBy('id', t.tipoId)?.main !== 'Estorno').length;
+
+            bulkActionsContainer.classList.toggle('hidden', selectedTransactionIds.length === 0);
+            
+            quitOpenBtn.classList.toggle('hidden', unpaidCount === 0);
+            if (unpaidCount > 0) {
+                quitOpenBtn.innerHTML = `<i class="fa fa-check-double"></i> Quitar ${unpaidCount} em Aberto`;
+            }
+
+            reversePaidBtn.classList.toggle('hidden', paidCount === 0);
+            if (paidCount > 0) {
+                reversePaidBtn.innerHTML = `<i class="fa-solid fa-receipt"></i> Estornar ${paidCount} Pagos`;
+            }
+        };
+
+        const updateUIForMonth = () => {
+            if (!currentUser) return;
+            currentMonthDisplay.textContent = currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).replace(/^\w/, c => c.toUpperCase());
+            const monthTransactions = getTransactionsForMonth(currentDate);
+            
+            const getSum = (type) => monthTransactions.filter(t => findTypeBy('id', t.tipoId)?.main === type).reduce((acc, t) => acc + t.valor, 0);
+            
+            const receitas = getSum('Receita');
+            const despesas = getSum('Despesa');
+            const investimentos = getSum('Investimento');
+            const estornos = getSum('Estorno');
+
+            const despesasLiquidas = despesas - estornos;
+            const saldo = receitas - despesasLiquidas - investimentos;
+
+            document.getElementById('summary-receitas').textContent = formatCurrency(receitas);
+            document.getElementById('summary-despesas').textContent = formatCurrency(despesasLiquidas);
+            document.getElementById('summary-investimentos').textContent = formatCurrency(investimentos);
+            document.getElementById('summary-saldo').textContent = formatCurrency(saldo);
+            const saldoCard = document.getElementById('summary-saldo').closest('.summary-card');
+            saldoCard.classList.toggle('bg-red-600', saldo < 0);
+            saldoCard.classList.toggle('bg-gray-800', saldo >= 0);
+            
+            selectedTransactionIds = [];
+            updateBulkActionsUI();
+            selectAllExpensesCheckbox.checked = false;
+
+            renderTransactions(monthTransactions);
+            renderInvoicesView(monthTransactions);
+        };
+
+        const renderTransactions = (monthTransactions) => {
+            const incomeTransactions = monthTransactions.filter(t => findTypeBy('id', t.tipoId)?.main === 'Receita');
+            let expenseTransactions = monthTransactions.filter(t => ['Despesa', 'Investimento'].includes(findTypeBy('id', t.tipoId)?.main));
+
+            // Renderiza Receitas
+            incomeTableBody.innerHTML = '';
+            emptyStateIncome.style.display = incomeTransactions.length > 0 ? 'none' : 'block';
+            incomeTransactions.sort((a,b) => new Date(a.data) - new Date(b.data)).forEach(t => {
+                const row = document.createElement('tr');
+                row.className = 'border-b';
+                let description = t.descricao;
+                 if (t.recurring) {
+                    description += ` <span class="text-xs font-mono text-purple-500">(Fixa)</span>`;
+                }
+                const tipoObj = findTypeBy('id', t.tipoId);
+
+                row.innerHTML = `
+                    <td class="px-6 py-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full flex items-center justify-center bg-green-100">
+                                <i class="fa-solid fa-arrow-up text-green-600"></i>
+                            </div>
+                            <div class="font-semibold text-gray-800">${description}</div>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">${new Date(t.data+'T00:00:00').toLocaleDateString('pt-BR')}</td>
+                    <td class="px-6 py-4"><span class="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-600">${t.categoria}</span></td>
+                    <td class="px-6 py-4 text-right font-mono font-semibold text-green-600 whitespace-nowrap">+ ${formatCurrency(t.valor)}</td>
+                    <td class="px-6 py-4 text-center">
+                        <div class="flex justify-center items-center gap-3">
+                            <button class="edit-btn text-gray-400 hover:text-blue-500" data-id="${t.id}"><i class="fa-solid fa-pen-to-square"></i></button>
+                            <button class="delete-btn text-gray-400 hover:text-red-500" data-id="${t.id}"><i class="fa fa-trash-alt"></i></button>
+                        </div>
+                    </td>
+                `;
+                incomeTableBody.appendChild(row);
+            });
+            const totalIncome = incomeTransactions.reduce((sum, t) => sum + t.valor, 0);
+            incomeTableFooter.innerHTML = totalIncome > 0 ? `<tr><td colspan="3" class="px-6 py-3 text-right font-bold text-gray-800">Total Receitas:</td><td class="px-6 py-3 text-right font-bold text-green-600">${formatCurrency(totalIncome)}</td><td></td></tr>` : '';
+
+            const incomeTableContainer = document.getElementById('income-table-container');
+            if (incomeTransactions.length > 50) {
+                incomeTableContainer.classList.add('table-scrollable');
+            } else {
+                incomeTableContainer.classList.remove('table-scrollable');
+            }
+
+            // Renderiza Despesas e Investimentos
+            if (currentFilter === 'nao-pagas') {
+                expenseTransactions = expenseTransactions.filter(t => !t.pago);
+            } else if (currentFilter === 'pagas') {
+                expenseTransactions = expenseTransactions.filter(t => t.pago);
+            }
+
+            expenseTransactions.sort((a, b) => {
+                const order = expenseSortState.order === 'asc' ? 1 : -1;
+                switch (expenseSortState.key) {
+                    case 'descricao':
+                        return a.descricao.localeCompare(b.descricao) * order;
+                    case 'valor':
+                        return (a.valor - b.valor) * order;
+                    case 'data':
+                    default:
+                        return (new Date(a.data) - new Date(b.data)) * order;
+                }
+            });
+
+            expenseTableBody.innerHTML = '';
+            emptyStateExpenses.style.display = expenseTransactions.length > 0 ? 'none' : 'block';
+            
+            expenseTransactions.forEach(t => {
+                const tipoObj = findTypeBy('id', t.tipoId);
+                const mainType = tipoObj?.main || 'Despesa';
+                let colorClass = 'text-red-600';
+                if(mainType === 'Estorno') colorClass = 'text-green-600';
+                else if(mainType === 'Investimento') colorClass = 'text-blue-600';
+                
+                let icon = 'fa-solid fa-arrow-down';
+                if(mainType === 'Estorno') icon = 'fa-solid fa-receipt';
+                else if (mainType === 'Investimento') icon = 'fa-solid fa-piggy-bank';
+
+                let description = t.descricao;
+                if (t.installments) {
+                    description += ` <span class="text-xs font-mono text-orange-500">(${t.installments.current}/${t.installments.total} de ${formatCurrency(t.installments.totalValue)})</span>`;
+                } else if (t.recurring) {
+                    description += ` <span class="text-xs font-mono text-purple-500">(Fixa)</span>`;
+                }
+                const cartao = settings.cartoes.find(c => c.id == t.cartaoId);
+
+                let lastInstallmentDate = '---';
+                if (t.installments) {
+                    const firstInstallmentDate = new Date(t.data + 'T00:00:00');
+                    firstInstallmentDate.setMonth(firstInstallmentDate.getMonth() - (t.installments.current - 1));
+                    const lastDate = new Date(firstInstallmentDate);
+                    lastDate.setMonth(firstInstallmentDate.getMonth() + t.installments.total - 1);
+                    lastInstallmentDate = lastDate.toLocaleDateString('pt-BR');
+                }
+
+                const row = document.createElement('tr');
+                row.className = `border-b hover:bg-gray-50 ${t.pago ? 'transaction-paid' : ''}`;
+                row.innerHTML = `
+                    <td class="px-6 py-4"><input type="checkbox" class="select-transaction-checkbox" data-id="${t.id}" ${selectedTransactionIds.includes(t.id) ? 'checked' : ''}></td>
+                    <td class="px-6 py-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full flex items-center justify-center ${mainType === 'Despesa' ? 'bg-red-100' : (mainType === 'Investimento' ? 'bg-blue-100' : 'bg-green-100')}"><i class="${icon} ${colorClass}"></i></div>
+                            <div class="font-semibold text-gray-800 description">${description}</div>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">${new Date(t.data+'T00:00:00').toLocaleDateString('pt-BR')}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${lastInstallmentDate}</td>
+                    <td class="px-6 py-4"><span class="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-600">${t.categoria}</span></td>
+                    <td class="px-6 py-4 text-gray-600 whitespace-nowrap"><i class="fa-regular fa-credit-card mr-2"></i>${cartao ? cartao.name : '---'}</td>
+                    <td class="px-6 py-4 text-right font-mono font-semibold ${colorClass} whitespace-nowrap">${mainType === 'Estorno' ? '+' : '-'} ${formatCurrency(t.valor)}</td>
+                    <td class="px-6 py-4 text-center">
+                        <div class="flex justify-center items-center gap-3">
+                            <button class="quit-btn text-gray-400 hover:text-green-500" data-id="${t.id}">${t.pago ? '<i class="fa-solid fa-check-circle text-green-500"></i>' : '<i class="fa-solid fa-check"></i>'}</button>
+                            <button class="edit-btn text-gray-400 hover:text-blue-500" data-id="${t.id}"><i class="fa-solid fa-pen-to-square"></i></button>
+                            <button class="delete-btn text-gray-400 hover:text-red-500" data-id="${t.id}"><i class="fa fa-trash-alt"></i></button>
+                        </div>
+                    </td>`;
+                expenseTableBody.appendChild(row);
+            });
+
+            const expenseTableContainer = document.getElementById('expense-table-container');
+            if (expenseTransactions.length > 50) {
+                expenseTableContainer.classList.add('table-scrollable');
+            } else {
+                expenseTableContainer.classList.remove('table-scrollable');
+            }
+
+            expenseTableFooter.innerHTML = ''; 
+            if (currentFilter === 'pagas') {
+                const totalPaid = expenseTransactions.reduce((sum, t) => {
+                    const tipoObj = findTypeBy('id', t.tipoId);
+                    return sum + (tipoObj?.main === 'Estorno' ? -t.valor : t.valor);
+                }, 0);
+                if (totalPaid > 0) {
+                    expenseTableFooter.innerHTML = `<tr><td colspan="6" class="px-6 py-3 text-right text-gray-800">Total Pago:</td><td class="px-6 py-3 text-right text-green-600">${formatCurrency(totalPaid)}</td><td></td></tr>`;
+                }
+            } else {
+                 const totalUnpaid = monthTransactions.filter(t => !t.pago && ['Despesa', 'Investimento', 'Estorno'].includes(findTypeBy('id', t.tipoId)?.main)).reduce((sum, t) => {
+                    const tipoObj = findTypeBy('id', t.tipoId);
+                    return sum + (tipoObj?.main === 'Estorno' ? -t.valor : t.valor);
+                }, 0);
+                if (totalUnpaid > 0) {
+                    expenseTableFooter.innerHTML = `<tr><td colspan="6" class="px-6 py-3 text-right text-gray-800">Total a Pagar:</td><td class="px-6 py-3 text-right text-red-600">${formatCurrency(totalUnpaid)}</td><td></td></tr>`;
+                }
+            }
+        };
+
+        const renderInvoicesView = (monthTransactions) => {
+            faturasViewContent.innerHTML = '';
+            let contentFound = false;
+            let creditCardData = [];
+            let otherGroupsData = [];
+
+            const createInvoiceCardHTML = (config) => {
+                const { title, icon, color, transactions, groupType, groupId, subtitle } = config;
+
+                const estornos = transactions.filter(t => findTypeBy('id', t.tipoId)?.main === 'Estorno');
+                const despesasNormais = transactions.filter(t => findTypeBy('id', t.tipoId)?.main !== 'Estorno');
+
+                const totalEstornos = estornos.reduce((sum, t) => sum + t.valor, 0);
+
+                const totalPagarBruto = despesasNormais.filter(t => !t.pago).reduce((sum, t) => sum + t.valor, 0);
+                const totalPagar = totalPagarBruto - totalEstornos;
+
+                const totalPago = despesasNormais.filter(t => t.pago).reduce((sum, t) => sum + t.valor, 0);
+                const totalFaturaBruta = despesasNormais.reduce((sum, t) => sum + t.valor, 0);
+                const totalFaturaLiquida = totalFaturaBruta - totalEstornos;
+                const allPaid = totalPagar <= 0 && despesasNormais.length > 0;
+
+                const sortKey = `${groupType}_${groupId}`;
+                const currentSort = invoiceSortState[sortKey] || 'date-asc';
+                
+                const sortedTransactions = [...transactions].sort((a, b) => {
+                    switch(currentSort) {
+                        case 'name': return a.descricao.localeCompare(b.descricao);
+                        case 'date-desc': return new Date(b.data) - new Date(a.data);
+                        case 'date-asc':
+                        default:
+                            return new Date(a.data) - new Date(b.data);
+                    }
+                });
+
+                let transactionsHtml = sortedTransactions.map(t => {
+                    let description = t.descricao;
+                    const isEstorno = findTypeBy('id', t.tipoId)?.main === 'Estorno';
+
+                    if (t.installments) {
+                        description += ` <span class="text-xs font-mono text-orange-500">(${t.installments.current}/${t.installments.total})</span>`;
+                    }
+                    return `
+                    <li class="flex justify-between items-center text-sm py-1.5 border-b border-gray-100 last:border-b-0 ${t.pago ? 'line-through text-gray-400' : ''}">
+                        <div class="flex items-center gap-2 truncate">
+                            <span class="truncate pr-2">${description}</span>
+                            <div class="item-actions flex-shrink-0">
+                               <button class="edit-invoice-item-btn text-gray-400 hover:text-blue-500" data-id="${t.id}"><i class="fa-solid fa-pen-to-square fa-xs"></i></button>
+                               <button class="delete-invoice-item-btn text-gray-400 hover:text-red-500" data-id="${t.id}"><i class="fa fa-trash-alt fa-xs"></i></button>
+                            </div>
+                        </div>
+                        <span class="font-mono whitespace-nowrap ${isEstorno ? 'text-green-600' : ''}">${isEstorno ? '+' : ''}${formatCurrency(t.valor)}</span>
+                    </li>`;
+                }).join('');
+
+                return `
+                    <div class="invoice-card border-l-4 ${color}">
+                        ${allPaid ? '<div class="paid-stamp">Pago</div>' : ''}
+                        <div class="flex justify-between items-center mb-2">
+                             <div class="flex items-center gap-3">
+                                <h4 class="font-bold text-lg text-gray-700"><i class="${icon} mr-2"></i>${title}</h4>
+                                <button data-group-type="${groupType}" data-id="${groupId}" data-subtitle="${subtitle || ''}" class="whatsapp-share-btn text-green-500 hover:text-green-600" title="Compartilhar no WhatsApp">
+                                    <i class="fa-brands fa-whatsapp fa-lg"></i>
+                                </button>
+                            </div>
+                             <div class="sort-controls flex gap-2 text-xs text-gray-400">
+                                 <button data-sort="date-asc" data-group-key="${sortKey}" class="sort-btn ${currentSort === 'date-asc' ? 'active' : ''}" title="Ordenar por Data (Crescente)"><i class="fa-solid fa-arrow-up-1-9"></i></button>
+                                 <button data-sort="date-desc" data-group-key="${sortKey}" class="sort-btn ${currentSort === 'date-desc' ? 'active' : ''}" title="Ordenar por Data de Lançamento (Decrescente)"><i class="fa-solid fa-arrow-down-9-1"></i></button>
+                                 <button data-sort="name" data-group-key="${sortKey}" class="sort-btn ${currentSort === 'name' ? 'active' : ''}" title="Ordenar por Nome"><i class="fa-solid fa-font"></i></button>
+                            </div>
+                        </div>
+                        <p class="text-sm text-gray-500 mb-3">${subtitle || `${transactions.length} transações`}</p>
+                        
+                        <div class="space-y-2 mb-4">
+                             ${totalEstornos > 0 ? `
+                                <div class="flex justify-between text-xs text-gray-500">
+                                    <span>Total Bruto:</span>
+                                    <span class="font-medium">${formatCurrency(totalFaturaBruta)}</span>
+                                </div>
+                                <div class="flex justify-between text-xs text-green-600">
+                                    <span>Créditos/Estornos:</span>
+                                    <span class="font-medium">- ${formatCurrency(totalEstornos)}</span>
+                                </div>
+                                <div class="flex justify-between text-sm font-semibold border-t pt-1 mt-1">
+                                    <span>Total da Fatura:</span>
+                                    <span class="font-medium">${formatCurrency(totalFaturaLiquida)}</span>
+                                </div>
+                            ` : `
+                                <div class="flex justify-between text-sm font-semibold">
+                                    <span>Total da Fatura:</span>
+                                    <span class="font-medium">${formatCurrency(totalFaturaLiquida)}</span>
+                                </div>
+                            `}
+                            <div class="flex justify-between text-xs text-green-600">
+                                <span>Contas Pagas:</span>
+                                <span class="font-medium">${formatCurrency(totalPago)}</span>
+                            </div>
+                        </div>
+
+                        <div class="border-t pt-2">
+                            <p class="text-sm font-semibold text-gray-800">Valor a Pagar:</p>
+                            <p class="font-bold text-2xl ${allPaid ? 'text-green-500' : 'text-red-600'}">${formatCurrency(totalPagar)}</p>
+                        </div>
+                        
+                        <div class="border-t pt-2 mt-4">
+                            <div class="invoice-list">
+                                <ul>${transactionsHtml || '<li class="text-gray-400 text-center text-sm py-2">Nenhuma transação.</li>'}</ul>
+                            </div>
+                            ${transactions.length > 5 ? '<button class="toggle-list-btn text-blue-500 text-sm mt-2 hover:underline w-full text-center">Ver mais</button>' : ''}
+                        </div>
+                        <div class="flex gap-2 mt-4">
+                            <button data-group-type="${groupType}" data-id="${groupId}" class="quit-group-btn w-full py-2 px-4 text-sm font-medium rounded-lg ${allPaid ? 'bg-yellow-500 hover:bg-yellow-600 text-white' : 'bg-green-500 hover:bg-green-600 text-white'}">
+                                ${allPaid ? 'Estornar Pagamento' : `Quitar ${title}`}
+                            </button>
+                            ${groupType === 'card' ? `<button data-card-id="${groupId}" class="reversal-btn w-full py-2 px-4 text-sm font-medium rounded-lg bg-indigo-500 hover:bg-indigo-600 text-white">Lançar Estorno</button>` : ''}
+                        </div>
+                    </div>`;
+            };
+
+            // 1. Process and collect credit card data
+            settings.cartoes.forEach(card => {
+                const cardTransactions = monthTransactions.filter(t => t.cartaoId === card.id);
+                if (cardTransactions.length > 0) {
+                    contentFound = true;
+                    
+                    // Calculate next due date
+                    let dueDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), card.diaVencimento);
+                    if (currentDate.getDate() > card.diaVencimento) {
+                        dueDate.setMonth(dueDate.getMonth() + 1);
+                    }
+
+                    creditCardData.push({
+                        dueDate: dueDate,
+                        htmlConfig: {
+                            title: `Fatura ${card.name}`,
+                            icon: 'fa-solid fa-credit-card',
+                            color: 'border-blue-500',
+                            subtitle: `Vencimento dia ${card.diaVencimento}`,
+                            transactions: cardTransactions,
+                            groupType: 'card',
+                            groupId: card.id
+                        }
+                    });
+                }
+            });
+
+            // 2. Sort credit cards by due date
+            creditCardData.sort((a, b) => a.dueDate - b.dueDate);
+
+            // 3. Process other groups
+            const nonCardExpenses = monthTransactions.filter(t => !t.cartaoId && findTypeBy('id', t.tipoId)?.main === 'Despesa');
+            
+            if (ocultoCardDespesasGerais) {
+                const fixedTransactions = nonCardExpenses.filter(t => t.recurring);
+                if (fixedTransactions.length > 0) {
+                    contentFound = true;
+                    otherGroupsData.push({ htmlConfig: { title: 'Contas Fixas', icon: 'fa-solid fa-repeat', color: 'border-purple-500', transactions: fixedTransactions, groupType: 'fixed', groupId: 'fixed' } });
+                }
+
+                const installmentTransactions = nonCardExpenses.filter(t => t.installments);
+                if (installmentTransactions.length > 0) {
+                    contentFound = true;
+                    otherGroupsData.push({ htmlConfig: { title: 'Parcelas', icon: 'fa-solid fa-list-ol', color: 'border-orange-500', transactions: installmentTransactions, groupType: 'installments', groupId: 'installments' } });
+                }
+
+                const singleTransactions = nonCardExpenses.filter(t => !t.recurring && !t.installments);
+                if (singleTransactions.length > 0) {
+                    contentFound = true;
+                    otherGroupsData.push({ htmlConfig: { title: 'Contas Avulsas', icon: 'fa-solid fa-file-invoice', color: 'border-yellow-500', transactions: singleTransactions, groupType: 'single', groupId: 'single' } });
+                }
+            } else {
+                if (nonCardExpenses.length > 0) {
+                    contentFound = true;
+                    otherGroupsData.push({ htmlConfig: { title: 'Despesas Gerais', icon: 'fa-solid fa-layer-group', color: 'border-purple-500', transactions: nonCardExpenses, groupType: 'general', groupId: 'general' } });
+                }
+            }
+
+            // 4. Combine and render
+            const allCardsData = [...creditCardData, ...otherGroupsData];
+            faturasViewContent.innerHTML = allCardsData.map(card => createInvoiceCardHTML(card.htmlConfig)).join('');
+
+            const toggleBtn = document.getElementById('toggle-grouping-btn');
+            if (toggleBtn) {
+                toggleBtn.textContent = ocultoCardDespesasGerais ? 'Agrupar Contas' : 'Separar Contas';
+                toggleBtn.onclick = () => {
+                    ocultoCardDespesasGerais = !ocultoCardDespesasGerais;
+                    renderInvoicesView(getTransactionsForMonth(currentDate));
+                };
+            }
+            emptyStateFaturas.style.display = contentFound ? 'none' : 'block';
+        };
+        
+        const openModal = (modalElement) => { modalBackdrop.classList.remove('hidden'); modalElement.classList.remove('hidden'); };
+        const closeModal = () => { modalBackdrop.classList.add('hidden'); allModals.forEach(m => m.classList.add('hidden')); };
+        const showFormError = (form, fieldName, message) => {
+            const field = form.querySelector(`[name="${fieldName}"]`);
+            if (!field) return;
+            const errorElement = document.createElement('p');
+            errorElement.className = 'error-message';
+            errorElement.textContent = message;
+            const oldError = field.parentElement.querySelector('.error-message') || field.parentElement.parentElement.querySelector('.error-message');
+            if(oldError) oldError.remove();
+            field.parentElement.appendChild(errorElement);
+        };
+        const clearFormErrors = (form) => {
+            form.querySelectorAll('.error-message').forEach(el => el.remove());
+        };
+
+        const openAddEditTransactionModal = (transaction = null) => {
+            console.log("Abrindo modal de edição/adição para a transação:", transaction);
+            const isEditing = transaction !== null;
+            const formValue = isEditing ? (transaction.installments ? transaction.valor : transaction.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '';
+            const isEstorno = isEditing && findTypeBy('id', transaction.tipoId)?.main === 'Estorno';
+
+            const modal = document.getElementById('addEditTransactionModal');
+            modal.innerHTML = `
+                <div class="p-6"><div class="flex justify-between items-center mb-4"><h3 class="text-xl font-bold text-gray-800">${isEditing ? 'Editar' : 'Nova'} Transação</h3><button class="close-modal-btn text-gray-400 hover:text-gray-600"><i class="fa fa-times fa-lg"></i></button></div>
+                    <form id="transaction-form" novalidate>
+                        <input type="hidden" name="id" value="${isEditing ? transaction.id : ''}">
+                        
+                        <div class="mb-4"><label for="tipo" class="block text-sm font-medium text-gray-700 mb-1">Tipo</label><select id="tipo" name="tipoId" class="w-full px-3 py-2 border border-gray-300 rounded-lg" required ${isEstorno ? 'disabled' : ''}></select></div>
+                        <div class="mb-4"><label for="categoria" class="block text-sm font-medium text-gray-700 mb-1">Categoria</label><select id="categoria" name="categoria" class="w-full px-3 py-2 border border-gray-300 rounded-lg" required ${isEstorno ? 'disabled' : ''}></select></div>
+                        <div id="credit-card-wrapper" class="mb-4 hidden"><label for="cartao" class="block text-sm font-medium text-gray-700 mb-1">Cartão de Crédito (Opcional)</label><select id="cartao" name="cartaoId" class="w-full px-3 py-2 border border-gray-300 rounded-lg" ${isEstorno ? 'disabled' : ''}></select></div>
+                        <div class="mb-4"><label for="transacao" class="block text-sm font-medium text-gray-700 mb-1">Descrição</label><input type="text" id="transacao" name="transacao" class="w-full px-3 py-2 border border-gray-300 rounded-lg" required value="${isEditing ? transaction.descricao : ''}"></div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div><label for="valor" class="block text-sm font-medium text-gray-700 mb-1">Valor</label><input type="text" id="valor" name="valor" inputmode="decimal" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="Valor" required value="${formValue}"></div>
+                            <div><label for="data" class="block text-sm font-medium text-gray-700 mb-1">Data</label><input type="date" id="data" name="data" class="w-full px-3 py-2 border border-gray-300 rounded-lg" required value="${isEditing ? transaction.data : ''}"></div>
+                        </div>
+                        
+                        <div id="advanced-options" class="space-y-4 p-4 bg-gray-50 rounded-lg mb-6 ${isEstorno ? 'hidden' : ''}">
+                            <div id="expense-options">
+                                <div class="flex items-center"><input id="is-installment-check" name="is-installment" type="checkbox" class="h-4 w-4 rounded border-gray-300"><label for="is-installment-check" class="ml-3 block text-sm font-medium text-gray-900">Lançar parcelas?</label></div>
+                                <div id="installment-fields" class="hidden space-y-2 mt-2"><label for="total-installments" class="block text-sm font-medium">Número de Parcelas</label><input type="number" name="total-installments" id="total-installments" class="w-full px-3 py-2 border rounded-lg"></div>
+                                <div class="flex items-center mt-2"><input id="is-recurring-check" name="is-recurring" type="checkbox" class="h-4 w-4 rounded border-gray-300"><label for="is-recurring-check" class="ml-3 block text-sm font-medium text-gray-900">Conta Fixa (repetir por 12 meses)</label></div>
+                            </div>
+                            <div id="income-options" class="hidden">
+                                 <div class="flex items-center"><input id="is-recurring-income-check" name="is-recurring-income" type="checkbox" class="h-4 w-4 rounded border-gray-300"><label for="is-recurring-income-check" class="ml-3 block text-sm font-medium text-gray-900">Receita Fixa (repetir por 12 meses)</label></div>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-end"><button type="submit" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700">${isEditing ? 'Salvar Alterações' : 'Adicionar Transação'}</button></div>
+                    </form>
+                </div>`;
+            const form = modal.querySelector('#transaction-form');
+            const tipoSelect = form.querySelector('#tipo');
+            const creditCardWrapper = form.querySelector('#credit-card-wrapper');
+            const cartaoSelect = form.querySelector('#cartao');
+            const dataInput = form.querySelector('#data');
+            
+            const expenseOptions = form.querySelector('#expense-options');
+            const incomeOptions = form.querySelector('#income-options');
+            const installmentCheck = form.querySelector('#is-installment-check');
+            const installmentFields = form.querySelector('#installment-fields');
+            const recurringCheck = form.querySelector('#is-recurring-check');
+            const recurringIncomeCheck = form.querySelector('#is-recurring-income-check');
+
+            installmentCheck.onchange = (e) => {
+                installmentFields.classList.toggle('hidden', !e.target.checked);
+                recurringCheck.disabled = e.target.checked;
+                if (e.target.checked) recurringCheck.checked = false;
+            };
+            recurringCheck.onchange = (e) => {
+                installmentCheck.disabled = e.target.checked;
+                if (e.target.checked) {
+                    installmentCheck.checked = false;
+                    installmentFields.classList.add('hidden');
+                }
+            };
+
+            const populateTransactionSelects = (form) => {
+                const categoriaSelect = form.querySelector('#categoria');
+                const tipoSelect = form.querySelector('#tipo');
+                const cartaoSelect = form.querySelector('#cartao');
+                
+                tipoSelect.innerHTML = '<option value="" disabled selected>Selecione</option>';
+                settings.tipos.sort((a, b) => a.name.localeCompare(b.name));
+                settings.tipos.filter(t => t.main !== 'Estorno').forEach(tipo => {
+                    const option = document.createElement('option');
+                    option.value = tipo.id;
+                    option.textContent = tipo.name;
+                    tipoSelect.appendChild(option);
+                });
+
+                cartaoSelect.innerHTML = '<option value="">Nenhum</option>';
+                settings.cartoes.sort((a, b) => a.name.localeCompare(b.name));
+                settings.cartoes.forEach(cartao => {
+                    const option = document.createElement('option');
+                    option.value = cartao.id;
+                    option.textContent = cartao.name;
+                    cartaoSelect.appendChild(option);
+                });
+
+                cartaoSelect.onchange = () => {
+                    const cardId = cartaoSelect.value;
+                    if (!cardId) return;
+                    const card = settings.cartoes.find(c => c.id == cardId);
+                    if (!card) return;
+                    const dueDate = parseInt(card.diaVencimento);
+                    let transactionDate = new Date();
+                    if (transactionDate.getDate() > dueDate) {
+                        transactionDate.setMonth(transactionDate.getMonth() + 1);
+                    }
+                    transactionDate.setDate(dueDate);
+                    dataInput.value = transactionDate.toISOString().split('T')[0];
+                };
+
+                tipoSelect.onchange = () => {
+                    const tipoId = tipoSelect.value;
+                    const tipoObj = settings.tipos.find(t => t.id.toString() === tipoId);
+                    const mainType = tipoObj ? tipoObj.main : null;
+
+                    creditCardWrapper.classList.toggle('hidden', mainType !== 'Despesa');
+                    
+                    if (mainType === 'Receita') {
+                        expenseOptions.classList.add('hidden');
+                        incomeOptions.classList.remove('hidden');
+                    } else {
+                        expenseOptions.classList.remove('hidden');
+                        incomeOptions.classList.add('hidden');
+                    }
+
+                    categoriaSelect.innerHTML = '';
+                    if (settings.categorias[tipoId]) {
+                        const categorias = settings.categorias[tipoId];
+                        categorias.sort((a, b) => a.localeCompare(b, 'pt', { sensitivity: 'base' }));
+                        categorias.forEach(cat => {
+                            const option = document.createElement('option');
+                            option.value = cat;
+                            option.textContent = cat;
+                            categoriaSelect.appendChild(option);
+                        });
+                    }
+                };
+            };
+
+            
+            populateTransactionSelects(form);
+            if (isEditing) {
+                if (isEstorno) {
+                    const option = document.createElement('option');
+                    option.value = transaction.tipoId;
+                    option.textContent = findTypeBy('id', transaction.tipoId)?.name || 'Estorno';
+                    tipoSelect.prepend(option);
+                }
+
+                tipoSelect.value = transaction.tipoId;
+                tipoSelect.dispatchEvent(new Event('change'));
+                form.querySelector('#categoria').value = transaction.categoria;
+                if(transaction.cartaoId) {
+                    cartaoSelect.value = transaction.cartaoId;
+                }
+                if (transaction.installments) {
+                    installmentCheck.checked = true;
+                    installmentCheck.dispatchEvent(new Event('change'));
+                    form.querySelector('[name="total-installments"]').value = transaction.installments.total;
+                }
+                if (transaction.recurring) {
+                    const tipoObj = findTypeBy('id', transaction.tipoId);
+                    if (tipoObj && tipoObj.main === 'Receita') {
+                        recurringIncomeCheck.checked = true;
+                    } else {
+                        recurringCheck.checked = true;
+                    }
+                }
+
+            } else {
+                dataInput.valueAsDate = new Date();
+            }
+
+            form.onsubmit = async (e) => {
+                e.preventDefault();
+                if (!currentUser) return;
+                clearFormErrors(form);
+
+                const formData = new FormData(form);
+                const valorNum = parseCurrency(formData.get('valor'));
+                if (isNaN(valorNum) || valorNum <= 0) { showFormError(form, 'valor', 'Valor inválido.'); return; }
+                
+                const originalTransaction = isEditing ? transactions.find(t => t.id === transaction.id) : {};
+                
+                const transactionData = { 
+                    descricao: formData.get('transacao'), 
+                    valor: valorNum, 
+                    data: formData.get('data'), 
+                    tipoId: isEstorno ? originalTransaction.tipoId : parseInt(formData.get('tipoId')), 
+                    categoria: isEstorno ? originalTransaction.categoria : formData.get('categoria'),
+                    cartaoId: isEstorno ? originalTransaction.cartaoId : (formData.get('cartaoId') ? parseInt(formData.get('cartaoId')) : null),
+                    pago: transaction?.pago || false
+                };
+                
+                const idToEdit = formData.get('id');
+                
+                if (idToEdit && originalTransaction.groupId) {
+                    openEditRecurringConfirmationModal(transactionData, originalTransaction);
+                    return; 
+                }
+
+                const isInstallment = formData.get('is-installment') === 'on';
+                const isRecurring = formData.get('is-recurring') === 'on';
+                const isRecurringIncome = formData.get('is-recurring-income') === 'on';
+                const shouldCreateGroup = isInstallment || isRecurring || isRecurringIncome;
+                
+                if (idToEdit && !originalTransaction.groupId && shouldCreateGroup) {
+                    await deleteDoc(doc(db, 'users', currentUser.uid, 'transactions', idToEdit));
+                    transactions = transactions.filter(t => t.id !== idToEdit);
+                } else if (idToEdit) {
+                    const docRef = doc(db, 'users', currentUser.uid, 'transactions', idToEdit);
+                    await updateDoc(docRef, transactionData);
+                    const index = transactions.findIndex(t => t.id == idToEdit);
+                    if (index > -1) transactions[index] = { ...transactions[index], ...transactionData };
+                    updateUIForMonth();
+                    closeModal();
+                    return;
+                }
+
+                const groupId = Date.now();
+                const transactionsColRef = collection(db, 'users', currentUser.uid, 'transactions');
+
+                if (isInstallment) {
+                    const totalInstallments = parseInt(formData.get('total-installments'), 10);
+                    if (isNaN(totalInstallments) || totalInstallments <= 1) { showFormError(form, 'total-installments', 'Número de parcelas inválido.'); return; }
+                    const installmentValue = valorNum; 
+                    const totalValue = valorNum * totalInstallments;
+                    const baseDate = new Date(transactionData.data + 'T00:00:00');
+                    for (let i = 0; i < totalInstallments; i++) {
+                        const installmentDate = new Date(baseDate);
+                        installmentDate.setMonth(baseDate.getMonth() + i);
+                        const newInstallment = { ...transactionData, groupId, valor: installmentValue, data: installmentDate.toISOString().split('T')[0], installments: { current: i + 1, total: totalInstallments, totalValue: totalValue } };
+                        const docRef = await addDoc(transactionsColRef, newInstallment);
+                        transactions.push({ ...newInstallment, id: docRef.id });
+                    }
+                } else if (isRecurring || isRecurringIncome) {
+                    const totalRecurring = 12;
+                    const baseDate = new Date(transactionData.data + 'T00:00:00');
+                    for (let i = 0; i < totalRecurring; i++) {
+                        const recurringDate = new Date(baseDate);
+                        recurringDate.setMonth(baseDate.getMonth() + i);
+                        const newRecurring = { ...transactionData, groupId, data: recurringDate.toISOString().split('T')[0], recurring: true };
+                        const docRef = await addDoc(transactionsColRef, newRecurring);
+                        transactions.push({ ...newRecurring, id: docRef.id });
+                    }
+                } else {
+                    const docRef = await addDoc(transactionsColRef, transactionData);
+                    transactions.push({ ...transactionData, id: docRef.id });
+                }
+                
+                updateUIForMonth();
+                closeModal();
+            };
+            openModal(modal);
+        };
+        
+        const openEditRecurringConfirmationModal = (updatedData, originalTransaction) => {
+            const modal = document.getElementById('editRecurringConfirmModal');
+            modal.innerHTML = `
+                <div class="p-6 text-center">
+                    <i class="fa-solid fa-pen-to-square text-4xl text-blue-500 mb-4"></i>
+                    <h3 class="text-lg font-bold text-gray-800 mb-2">Editar Transação Recorrente</h3>
+                    <p class="text-sm text-gray-600 mb-6">Como você deseja aplicar esta alteração?</p>
+                    <div class="flex flex-col sm:flex-row justify-center gap-4">
+                        <button id="editSingleBtn" class="w-full bg-gray-200 text-gray-800 font-bold py-3 px-4 rounded-lg hover:bg-gray-300">Alterar Somente Esta</button>
+                        <button id="editFutureBtn" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700">Alterar Esta e as Futuras</button>
+                    </div>
+                    <button id="cancelEditBtn" class="w-full bg-gray-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-600 mt-4">Cancelar</button>
+                </div>`;
+
+            modal.querySelector('#editSingleBtn').onclick = async () => {
+                const docRef = doc(db, 'users', currentUser.uid, 'transactions', originalTransaction.id);
+                await updateDoc(docRef, { ...updatedData, groupId: null, installments: null, recurring: null });
+                const index = transactions.findIndex(t => t.id === originalTransaction.id);
+                if (index > -1) {
+                    transactions[index] = { ...transactions[index], ...updatedData, groupId: null, installments: null, recurring: null };
+                }
+                updateUIForMonth();
+                closeModal();
+            };
+
+            modal.querySelector('#editFutureBtn').onclick = async () => {
+                const { groupId, installments, recurring } = originalTransaction;
+                
+                const futureTransactionsToDelete = transactions.filter(t =>
+                    t.groupId === groupId && new Date(t.data) >= new Date(originalTransaction.data)
+                );
+
+                for (const t of futureTransactionsToDelete) {
+                    await deleteDoc(doc(db, 'users', currentUser.uid, 'transactions', t.id));
+                }
+                transactions = transactions.filter(t => !futureTransactionsToDelete.some(del => del.id === t.id));
+
+                const transactionsColRef = collection(db, 'users', currentUser.uid, 'transactions');
+                const baseData = { ...updatedData, groupId };
+                const baseDate = new Date(baseData.data + 'T00:00:00');
+
+                if (installments) {
+                    const remainingInstallments = installments.total - installments.current + 1;
+                    const totalValue = baseData.valor * installments.total;
+                    for (let i = 0; i < remainingInstallments; i++) {
+                        const installmentDate = new Date(baseDate);
+                        installmentDate.setMonth(baseDate.getMonth() + i);
+                        const newInstallment = { 
+                            ...baseData, 
+                            data: installmentDate.toISOString().split('T')[0], 
+                            installments: { 
+                                current: installments.current + i, 
+                                total: installments.total, 
+                                totalValue: totalValue 
+                            } 
+                        };
+                        const docRef = await addDoc(transactionsColRef, newInstallment);
+                        transactions.push({ ...newInstallment, id: docRef.id });
+                    }
+                } else if (recurring) {
+                    const countToCreate = futureTransactionsToDelete.length;
+                    for (let i = 0; i < countToCreate; i++) {
+                        const recurringDate = new Date(baseDate);
+                        recurringDate.setMonth(baseDate.getMonth() + i);
+                        const newRecurring = { ...baseData, data: recurringDate.toISOString().split('T')[0], recurring: true };
+                        const docRef = await addDoc(transactionsColRef, newRecurring);
+                        transactions.push({ ...newRecurring, id: docRef.id });
+                    }
+                }
+                
+                updateUIForMonth();
+                closeModal();
+            };
+
+            modal.querySelector('#cancelEditBtn').onclick = closeModal;
+            openModal(modal);
+        };
+
+        const openGenericConfirmModal = (config) => {
+            const { title, message, onConfirm, confirmText = 'Confirmar', confirmClass = 'bg-blue-600 hover:bg-blue-700', iconClass = 'fa-solid fa-question-circle text-blue-500' } = config;
+            const modal = document.getElementById('genericConfirmModal');
+            modal.innerHTML = `
+                <div class="p-6 text-center">
+                    <i class="${iconClass} text-4xl mb-4"></i>
+                    <h3 class="text-lg font-bold text-gray-800 mb-2">${title}</h3>
+                    <p class="text-sm text-gray-600 mb-6">${message}</p>
+                    <div class="flex justify-center gap-4">
+                        <button id="generic-cancel-btn" class="w-full bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-300">Cancelar</button>
+                        <button id="generic-confirm-btn" class="w-full text-white font-bold py-2 px-4 rounded-lg ${confirmClass}">${confirmText}</button>
+                    </div>
+                </div>`;
+
+            modal.querySelector('#generic-confirm-btn').onclick = onConfirm;
+            modal.querySelector('#generic-cancel-btn').onclick = closeModal;
+            openModal(modal);
+        };
+
+        const openDeleteConfirmationModal = (transaction) => {
+            const hasGroup = transaction.groupId && transactions.filter(t => t.groupId === transaction.groupId).length > 1;
+
+            const deleteSingle = async () => {
+                await deleteDoc(doc(db, 'users', currentUser.uid, 'transactions', transaction.id));
+                transactions = transactions.filter(t => t.id !== transaction.id);
+                updateUIForMonth();
+                closeModal();
+            };
+
+            const deleteAll = async () => {
+                let transactionsToDelete;
+                if (transaction.recurring) {
+                     transactionsToDelete = transactions.filter(t => t.groupId === transaction.groupId && new Date(t.data) >= new Date(transaction.data));
+                } else {
+                     transactionsToDelete = transactions.filter(t => t.groupId === transaction.groupId);
+                }
+                for (const t of transactionsToDelete) {
+                    await deleteDoc(doc(db, 'users', currentUser.uid, 'transactions', t.id));
+                }
+                transactions = transactions.filter(t => !transactionsToDelete.some(del => del.id === t.id));
+                updateUIForMonth();
+                closeModal();
+            };
+
+            if (hasGroup) {
+                const modal = document.getElementById('deleteConfirmModal');
+                modal.innerHTML = `
+                <div class="p-6 text-center"><i class="fa-solid fa-triangle-exclamation text-4xl text-yellow-500 mb-4"></i><h3 class="text-lg font-bold text-gray-800 mb-2">Excluir Transação Recorrente</h3>
+                <p class="text-sm text-gray-600 mb-6">Esta é uma transação recorrente. Como você deseja excluí-la?</p>
+                <div class="flex flex-col justify-center gap-4">
+                    <button id="deleteSingleBtn" class="w-full bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-300">Excluir Somente Esta</button>
+                    <button id="deleteAllBtn" class="w-full bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700"></button>
+                </div>
+                <button id="cancelDeleteBtn" class="w-full bg-gray-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-600 mt-4">Cancelar</button></div>`;
+                
+                if (transaction.installments) {
+                    modal.querySelector('#deleteAllBtn').textContent = `Excluir Todas as ${transaction.installments.total} Parcelas`;
+                } else if (transaction.recurring) {
+                    modal.querySelector('#deleteAllBtn').textContent = `Excluir Esta e as Futuras`;
+                }
+                modal.querySelector('#deleteSingleBtn').onclick = deleteSingle;
+                modal.querySelector('#deleteAllBtn').onclick = deleteAll;
+                modal.querySelector('#cancelDeleteBtn').onclick = closeModal;
+                openModal(modal);
+            } else {
+                 openGenericConfirmModal({
+                    title: 'Confirmar Exclusão',
+                    message: `Você tem certeza que deseja excluir a transação <strong>"${transaction.descricao}"</strong> no valor de <strong>${formatCurrency(transaction.valor)}</strong>?`,
+                    onConfirm: deleteSingle,
+                    confirmText: 'Excluir',
+                    confirmClass: 'bg-red-600 hover:bg-red-700',
+                    iconClass: 'fa-solid fa-triangle-exclamation text-red-500'
+                });
+            }
+        };
+        
+        const openTypesModal = (typeToEdit = null) => {
+            const isEditing = typeToEdit !== null;
+            const modal = document.getElementById('typesModal');
+
+            modal.innerHTML = `
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-xl font-bold text-gray-800">Gerenciar Tipos</h3>
+                        <button class="close-modal-btn text-gray-400 hover:text-gray-600">
+                            <i class="fa fa-times fa-lg"></i>
+                        </button>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-lg text-gray-700 mb-3 border-b pb-2">Tipos de Transação</h4>
+                        <div id="types-list" class="space-y-2 mt-2 max-h-60 overflow-y-auto"></div>
+                        <form id="add-type-form" class="mt-4 space-y-3 p-4 border rounded-lg bg-gray-50">
+                            <input type="hidden" name="id" value="${isEditing ? typeToEdit.id : ''}">
+                            <h5 class="font-semibold text-md text-gray-800">${isEditing ? 'Editar Tipo' : 'Adicionar Novo Tipo'}</h5>
+                            <input type="text" name="name" placeholder="Nome do tipo" class="w-full border rounded-lg p-2" required value="${isEditing ? typeToEdit.name : ''}">
+                            <select name="main" class="w-full border rounded-lg p-2 bg-white" required>
+                                <option value="Despesa" ${isEditing && typeToEdit.main === 'Despesa' ? 'selected' : ''}>Despesa</option>
+                                <option value="Receita" ${isEditing && typeToEdit.main === 'Receita' ? 'selected' : ''}>Receita</option>
+                                <option value="Investimento" ${isEditing && typeToEdit.main === 'Investimento' ? 'selected' : ''}>Investimento</option>
+                                <option value="Estorno" ${isEditing && typeToEdit.main === 'Estorno' ? 'selected' : ''}>Estorno</option>
+                            </select>
+                            <button type="submit" class="w-full bg-blue-500 text-white p-2 rounded-lg hover:bg-blue-600">
+                                ${isEditing ? 'Salvar Alterações' : 'Adicionar Tipo'}
+                            </button>
+                            ${isEditing ? '<button type="button" id="cancel-edit-type-btn" class="w-full bg-gray-500 text-white p-2 rounded-lg hover:bg-gray-600 mt-2">Cancelar Edição</button>' : ''}
+                        </form>
+                    </div>
+                </div>`;
+
+            const renderTypes = () => {
+                const typesList = modal.querySelector('#types-list');
+                typesList.innerHTML = '';
+
+                settings.tipos.forEach(tipo => {
+                    const isSystemType = ['Estorno', 'Retirada Poupança', 'Depósito Poupança'].includes(tipo.name);
+                    typesList.innerHTML += `
+                        <div class="flex justify-between items-center p-2 bg-gray-50 rounded">
+                            <span>${tipo.name} <span class="text-xs text-gray-500">(${tipo.main})</span> ${isSystemType ? '<i class="fa-solid fa-lock fa-xs text-gray-400 ml-1" title="Tipo de sistema"></i>' : ''}</span>
+                            ${!isSystemType ? `
+                            <div class="flex gap-3">
+                                <button class="edit-type-btn text-gray-400 hover:text-blue-500" data-id="${tipo.id}">
+                                    <i class="fa-solid fa-pen-to-square"></i>
+                                </button>
+                                <button class="delete-type-btn text-gray-400 hover:text-red-500" data-id="${tipo.id}">
+                                    <i class="fa-solid fa-trash-can"></i>
+                                </button>
+                            </div>` : ''}
+                        </div>`;
+                });
+            };
+
+            modal.querySelector('#add-type-form').onsubmit = (e) => {
+                e.preventDefault();
+                const form = e.target;
+                clearFormErrors(form);
+                const name = form.elements.name.value.trim();
+                const main = form.elements.main.value;
+                const id = form.elements.id.value;
+
+                if (!name) {
+                    showFormError(form, 'name', 'Nome inválido.');
+                    return;
+                }
+
+                const nameAlreadyExists = settings.tipos.some(t =>
+                    t.name.toLowerCase() === name.toLowerCase() && t.id.toString() !== id
+                );
+
+                if (nameAlreadyExists) {
+                    showFormError(form, 'name', 'Tipo já existe.');
+                    return;
+                }
+
+                if (isEditing) {
+                    const tipoIndex = settings.tipos.findIndex(t => t.id.toString() === id);
+                    if (tipoIndex !== -1) {
+                        const isInUse = transactions.some(t => t.tipoId === parseInt(id));
+                        if (isInUse && settings.tipos[tipoIndex].name !== name) {
+                            showFormError(form, 'name', 'Tipo em uso, não pode renomear.');
+                            return;
+                        }
+
+                        settings.tipos[tipoIndex].name = name;
+                        settings.tipos[tipoIndex].main = main;
+                        saveSettings();
+                        closeModal();
+                        openTypesModal(); 
+                    }
+                } else {
+                    settings.tipos.push({ id: Date.now(), name, main });
+                    saveSettings();
+                    renderTypes();
+                    form.reset();
+                }
+            };
+
+            modal.onclick = (e) => {
+                const deleteBtn = e.target.closest('.delete-type-btn');
+                const editBtn = e.target.closest('.edit-type-btn');
+                const cancelEditBtn = e.target.closest('#cancel-edit-type-btn');
+
+                if (cancelEditBtn) {
+                    closeModal();
+                    openTypesModal();
+                }
+
+                if (editBtn) {
+                    const id = parseInt(editBtn.dataset.id);
+                    const tipo = settings.tipos.find(t => t.id === id);
+                    if (tipo) {
+                        closeModal();
+                        openTypesModal(tipo);
+                    }
+                }
+
+                if (deleteBtn) {
+                    const id = parseInt(deleteBtn.dataset.id);
+                    const isInUse = transactions.some(t => t.tipoId === id);
+                    if (isInUse) {
+                        showFormError(modal.querySelector('#add-type-form'), 'name', 'Tipo em uso.');
+                        return;
+                    }
+
+                    settings.tipos = settings.tipos.filter(t => t.id !== id);
+                    saveSettings();
+                    renderTypes();
+                }
+            };
+
+            renderTypes();
+            openModal(modal);
+        };
+
+        const openCategoriesModal = (categoryToEdit = null) => {
+                const isEditing = categoryToEdit !== null;
+                const modal = document.getElementById('categoriesModal');
+
+                modal.innerHTML = `
+                    <div class="p-6">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="text-xl font-bold text-gray-800">Gerenciar Categorias</h3>
+                            <button class="close-modal-btn text-gray-400 hover:text-gray-600">
+                                <i class="fa fa-times fa-lg"></i>
+                            </button>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-lg text-gray-700 mb-3 border-b pb-2">Categorias</h4>
+                            <div id="category-management-list" class="space-y-4 mt-2 max-h-60 overflow-y-auto"></div>
+                            <form id="add-category-form" class="mt-4 space-y-3 p-4 border rounded-lg bg-gray-50">
+                                <input type="hidden" name="originalName" value="${isEditing ? categoryToEdit.name : ''}">
+                                <input type="hidden" name="originalTipoId" value="${isEditing ? categoryToEdit.tipoId : ''}">
+                                <h5 class="font-semibold text-md text-gray-800">${isEditing ? 'Editar Categoria' : 'Adicionar Nova Categoria'}</h5>
+                                <input type="text" name="name" placeholder="Nome da Categoria" class="w-full border rounded-lg p-2" required value="${isEditing ? categoryToEdit.name : ''}">
+                                <select name="tipoId" class="w-full border rounded-lg p-2 bg-white" required>
+                                    <option value="" disabled ${!isEditing ? 'selected' : ''}>Selecione o tipo</option>
+                                    ${settings.tipos.map(t => `
+                                        <option value="${t.id}" ${isEditing && t.id.toString() === categoryToEdit.tipoId?.toString() ? 'selected' : ''}>
+                                            ${t.name} (${t.main})
+                                        </option>`).join('')}
+                                </select>
+                                <button type="submit" class="w-full bg-green-500 text-white p-2 rounded-lg hover:bg-green-600">
+                                    ${isEditing ? 'Salvar Alterações' : 'Adicionar Categoria'}
+                                </button>
+                                ${isEditing ? '<button type="button" id="cancel-edit-category-btn" class="w-full bg-gray-500 text-white p-2 rounded-lg hover:bg-gray-600 mt-2">Cancelar Edição</button>' : ''}
+                            </form>
+                        </div>
+                    </div>`;
+
+                const renderCategories = () => {
+                    const categoryManagementList = modal.querySelector('#category-management-list');
+                    categoryManagementList.innerHTML = '';
+
+                    Object.keys(settings.categorias).forEach(tipoId => {
+                        const tipo = settings.tipos.find(t => t.id.toString() === tipoId);
+                        if (!tipo) return;
+                        const tipoLabel = tipo ? `${tipo.name} (${tipo.main})` : tipoId;
+                        const isSystemType = ['Estorno'].includes(tipo.name);
+
+                        const categorias = settings.categorias[tipoId] || [];
+                        if (categorias.length === 0) return;
+
+                        const categoriaItems = categorias.map(cat => `
+                            <div class="flex justify-between items-center p-2 bg-gray-50 rounded">
+                                <span>${cat}</span>
+                                ${!isSystemType ? `
+                                <div class="flex gap-3">
+                                    <button class="edit-category-btn text-gray-400 hover:text-blue-500" data-tipoid="${tipoId}" data-category="${cat}">
+                                        <i class="fa-solid fa-pen-to-square"></i>
+                                    </button>
+                                    <button class="delete-category-btn text-gray-400 hover:text-red-500" data-tipoid="${tipoId}" data-category="${cat}">
+                                        <i class="fa-solid fa-trash-can"></i>
+                                    </button>
+                                </div>` : ''}
+                            </div>
+                        `).join('');
+
+                        categoryManagementList.innerHTML += `
+                            <div class="mb-4">
+                                <h5 class="font-semibold text-gray-600 mb-1">${tipoLabel} ${isSystemType ? '<i class="fa-solid fa-lock fa-xs text-gray-400 ml-1" title="Tipo de sistema"></i>' : ''}</h5>
+                                <div class="space-y-2 pl-2">${categoriaItems}</div>
+                            </div>
+                        `;
+                    });
+                };
+
+
+                modal.querySelector('#add-category-form').onsubmit = (e) => {
+                    e.preventDefault();
+                    const form = e.target;
+                    clearFormErrors(form);
+
+                    const name = form.elements.name.value.trim();
+                    const tipoId = form.elements.tipoId.value;
+                    const originalName = form.elements.originalName.value.trim();
+                    const originalTipoId = form.elements.originalTipoId.value;
+
+                    if (!name) return showFormError(form, 'name', 'Nome inválido.');
+                    if (!tipoId) return showFormError(form, 'tipoId', 'Tipo inválido.');
+
+                    if (!settings.categorias[tipoId]) settings.categorias[tipoId] = [];
+
+                    const alreadyExists = settings.categorias[tipoId].includes(name) && (name !== originalName || tipoId !== originalTipoId);
+
+                    if (alreadyExists) {
+                        showFormError(form, 'name', 'Categoria já existe.');
+                        return;
+                    }
+
+                    if (isEditing) {
+                        const isInUse = transactions.some(
+                            t => t.categoria === originalName && t.tipoId.toString() === originalTipoId
+                        );
+
+                        if (isInUse) {
+                            showFormError(form, 'name', 'Categoria em uso e não pode ser editada.');
+                            return;
+                        }
+
+                        if (settings.categorias[originalTipoId]) {
+                            settings.categorias[originalTipoId] = settings.categorias[originalTipoId].filter(c => c !== originalName);
+                        }
+
+                        if (!settings.categorias[tipoId].includes(name)) {
+                            settings.categorias[tipoId].push(name);
+                            settings.categorias[tipoId].sort();
+                        }
+
+                        saveSettings();
+                        closeModal();
+                        openCategoriesModal(); 
+                    } else {
+                        settings.categorias[tipoId].push(name);
+                        settings.categorias[tipoId].sort();
+                        saveSettings();
+                        renderCategories();
+                        form.reset();
+                    }
+                };
+
+                modal.onclick = (e) => {
+                    const deleteBtn = e.target.closest('.delete-category-btn');
+                    const editBtn = e.target.closest('.edit-category-btn');
+                    const cancelEditBtn = e.target.closest('#cancel-edit-category-btn');
+
+                    if (cancelEditBtn) {
+                        closeModal();
+                        openCategoriesModal();
+                    }
+
+                    if (editBtn) {
+                        const { tipoid, category } = editBtn.dataset;
+                        closeModal();
+                        openCategoriesModal({ name: category, tipoId: tipoid });
+                    }
+
+                    if (deleteBtn) {
+                        const { tipoid, category } = deleteBtn.dataset;
+                        const isInUse = transactions.some(
+                            t => t.categoria === category && t.tipoId.toString() === tipoid
+                        );
+                        if (isInUse) {
+                            showFormError(modal.querySelector('#add-category-form'), 'name', 'Categoria em uso.');
+                            return;
+                        }
+                        settings.categorias[tipoid] = settings.categorias[tipoid].filter(c => c !== category);
+                        saveSettings();
+                        renderCategories();
+                    }
+                };
+
+                renderCategories();
+                openModal(modal);
+            };
+
+
+        const openCreditCardsModal = (cardToEdit = null) => {
+            const isEditing = cardToEdit !== null;
+            const modal = document.getElementById('creditCardsModal');
+            modal.innerHTML = `
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-xl font-bold text-gray-800">Gerenciar Cartões de Crédito</h3>
+                        <button class="close-modal-btn text-gray-400 hover:text-gray-600"><i class="fa fa-times fa-lg"></i></button>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-lg text-gray-700 mb-3 border-b pb-2">Meus Cartões</h4>
+                        <div id="cards-list" class="space-y-2 mt-2 max-h-60 overflow-y-auto"></div>
+                        <form id="add-card-form" class="mt-4 space-y-3 p-4 border rounded-lg bg-gray-50">
+                             <input type="hidden" name="id" value="${isEditing ? cardToEdit.id : ''}">
+                            <h5 class="font-semibold text-md text-gray-800">${isEditing ? 'Editar Cartão' : 'Adicionar Novo Cartão'}</h5>
+                            <input type="text" name="name" placeholder="Nome do Cartão (Ex: Nubank)" class="w-full border rounded-lg p-2" required value="${isEditing ? cardToEdit.name : ''}">
+                            <select name="bandeira" class="w-full border rounded-lg p-2 bg-white" required>
+                                <option value="" disabled>Bandeira</option>
+                                <option>Visa</option><option>Mastercard</option><option>Elo</option><option>American Express</option><option>Hipercard</option><option>Outra</option>
+                            </select>
+                            <input type="number" name="diaVencimento" placeholder="Dia do Vencimento" class="w-full border rounded-lg p-2" min="1" max="31" required value="${isEditing ? cardToEdit.diaVencimento : ''}">
+                            <div class="flex items-center gap-4">
+                                <div class="flex items-center"><input id="temAnuidade" name="temAnuidade" type="checkbox" class="h-4 w-4 rounded border-gray-300" ${isEditing && cardToEdit.temAnuidade ? 'checked' : ''}><label for="temAnuidade" class="ml-2 block text-sm font-medium text-gray-900">Possui Anuidade?</label></div>
+                                <div id="anuidade-fields" class="flex-1 flex gap-2 ${isEditing && cardToEdit.temAnuidade ? '' : 'hidden'}">
+                                    <input type="text" name="valorAnuidade" placeholder="Valor da Parcela" class="w-1/2 border rounded-lg p-2" value="${isEditing && cardToEdit.temAnuidade ? cardToEdit.valorAnuidade.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : ''}">
+                                    <input type="number" name="parcelasAnuidade" placeholder="Vezes" class="w-1/2 border rounded-lg p-2" min="1" value="${isEditing && cardToEdit.temAnuidade ? cardToEdit.parcelasAnuidade : '1'}">
+                                </div>
+                            </div>
+                            <button type="submit" class="w-full bg-blue-500 text-white p-2 rounded-lg hover:bg-blue-600">${isEditing ? 'Salvar Alterações' : 'Adicionar Cartão'}</button>
+                            ${isEditing ? '<button type="button" id="cancel-edit-card-btn" class="w-full bg-gray-500 text-white p-2 rounded-lg hover:bg-gray-600 mt-2">Cancelar Edição</button>' : ''}
+                        </form>
+                    </div>
+                </div>`;
+            
+            if (isEditing) {
+                modal.querySelector('[name="bandeira"]').value = cardToEdit.bandeira;
+            } else {
+                 modal.querySelector('[name="bandeira"]').selectedIndex = 0;
+            }
+
+            const anuidadeCheckbox = modal.querySelector('[name="temAnuidade"]');
+            const anuidadeFields = modal.querySelector('#anuidade-fields');
+            anuidadeCheckbox.onchange = (e) => {
+                anuidadeFields.classList.toggle('hidden', !e.target.checked);
+            };
+
+            const renderCards = () => {
+                const cardsList = modal.querySelector('#cards-list');
+                cardsList.innerHTML = '';
+                if (settings.cartoes.length === 0) {
+                    cardsList.innerHTML = '<p class="text-gray-500 text-center">Nenhum cartão cadastrado.</p>';
+                } else {
+                    settings.cartoes.forEach(card => {
+                        cardsList.innerHTML += `
+                            <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                                <div>
+                                    <p class="font-semibold"><i class="fa-regular fa-credit-card mr-2"></i>${card.name} (${card.bandeira})</p>
+                                    <p class="text-xs text-gray-500 ml-6">Vence dia: ${card.diaVencimento} | Anuidade: ${card.temAnuidade ? `${card.parcelasAnuidade}x de ${formatCurrency(card.valorAnuidade)}` : 'Não'}</p>
+                                </div>
+                                <div class="flex gap-3">
+                                   <button class="edit-card-btn text-gray-400 hover:text-blue-500" data-id="${card.id}"><i class="fa-solid fa-pen-to-square"></i></button>
+                                   <button class="delete-card-btn text-gray-400 hover:text-red-500" data-id="${card.id}"><i class="fa-solid fa-trash-can"></i></button>
+                                </div>
+                            </div>`;
+                    });
+                }
+            };
+
+            const createAnnuityTransactions = async (card, valorAnuidade, parcelasAnuidade) => {
+                const anuidadeTypeId = settings.tipos.find(t => t.name === 'Anuidade')?.id;
+                if (!anuidadeTypeId) {
+                    console.error("Tipo 'Anuidade' não encontrado.");
+                    return;
+                }
+                const groupId = Date.now() + 1;
+                const baseDate = new Date();
+                baseDate.setDate(card.diaVencimento);
+                const transactionsColRef = collection(db, 'users', currentUser.uid, 'transactions');
+
+                for (let i = 0; i < parcelasAnuidade; i++) {
+                    const installmentDate = new Date(baseDate);
+                    installmentDate.setMonth(baseDate.getMonth() + i);
+                    const anuidadeTransaction = { 
+                        descricao: `Anuidade ${card.name}`, 
+                        valor: valorAnuidade,
+                        data: installmentDate.toISOString().split('T')[0], 
+                        tipoId: anuidadeTypeId, 
+                        categoria: 'Anuidade',
+                        cartaoId: card.id,
+                        groupId, 
+                        pago: false,
+                        installments: { current: i + 1, total: parcelasAnuidade, totalValue: valorAnuidade * parcelasAnuidade } 
+                    };
+                    const docRef = await addDoc(transactionsColRef, anuidadeTransaction);
+                    transactions.push({ ...anuidadeTransaction, id: docRef.id });
+                }
+            };
+
+            const deleteFutureAnnuityTransactions = async (card) => {
+                const anuidadeTypeId = settings.tipos.find(t => t.name === 'Anuidade')?.id;
+                if (!anuidadeTypeId) return;
+
+                const futureAnnuityTransactions = transactions.filter(t => 
+                    t.cartaoId === card.id &&
+                    t.tipoId === anuidadeTypeId &&
+                    t.descricao === `Anuidade ${card.name}` &&
+                    !t.pago &&
+                    new Date(t.data) >= new Date()
+                );
+
+                for (const t of futureAnnuityTransactions) {
+                    await deleteDoc(doc(db, 'users', currentUser.uid, 'transactions', t.id));
+                }
+                transactions = transactions.filter(t => !futureAnnuityTransactions.some(del => del.id === t.id));
+            };
+
+            modal.querySelector('#add-card-form').onsubmit = async (e) => {
+                e.preventDefault();
+                const form = e.target;
+                clearFormErrors(form);
+                const formData = new FormData(form);
+                const cardId = formData.get('id') ? parseInt(formData.get('id')) : null;
+                const name = formData.get('name').trim();
+                const temAnuidade = formData.get('temAnuidade') === 'on';
+                const valorAnuidade = temAnuidade ? parseCurrency(formData.get('valorAnuidade')) : 0;
+                const parcelasAnuidade = temAnuidade ? parseInt(formData.get('parcelasAnuidade')) || 1 : 0;
+
+                const cardData = {
+                    name,
+                    bandeira: formData.get('bandeira'),
+                    diaVencimento: parseInt(formData.get('diaVencimento')),
+                    temAnuidade,
+                    valorAnuidade,
+                    parcelasAnuidade
+                };
+
+                if (cardId) {
+                    const index = settings.cartoes.findIndex(c => c.id === cardId);
+                    if (index > -1) {
+                        const originalCard = settings.cartoes[index];
+                        settings.cartoes[index] = { ...originalCard, ...cardData };
+
+                        if (cardData.temAnuidade && !originalCard.temAnuidade) {
+                            await createAnnuityTransactions(settings.cartoes[index], cardData.valorAnuidade, cardData.parcelasAnuidade);
+                        }
+                        else if (!cardData.temAnuidade && originalCard.temAnuidade) {
+                            await deleteFutureAnnuityTransactions(originalCard);
+                        }
+                        
+                        await saveSettings();
+                        updateUIForMonth();
+                        closeModal();
+                        openCreditCardsModal(); 
+                    }
+                } else {
+                    if (name && !settings.cartoes.some(c => c.name.toLowerCase() === name.toLowerCase())) {
+                        const newCard = { id: Date.now(), ...cardData };
+                        settings.cartoes.push(newCard);
+
+                        if (temAnuidade && valorAnuidade > 0 && parcelasAnuidade > 0) {
+                            await createAnnuityTransactions(newCard, valorAnuidade, parcelasAnuidade);
+                        }
+                        await saveSettings();
+                        renderCards();
+                        form.reset();
+                        anuidadeFields.classList.add('hidden');
+                        updateUIForMonth(); 
+                    } else {
+                        showFormError(form, 'name', 'Nome de cartão inválido ou já existe.');
+                    }
+                }
+            };
+
+            modal.onclick = (e) => {
+                const deleteCardBtn = e.target.closest('.delete-card-btn');
+                const editCardBtn = e.target.closest('.edit-card-btn');
+                const cancelEditBtn = e.target.closest('#cancel-edit-card-btn');
+
+                if (cancelEditBtn) {
+                    closeModal();
+                    openCreditCardsModal();
+                }
+
+                if (editCardBtn) {
+                    const cardId = parseInt(editCardBtn.dataset.id);
+                    const card = settings.cartoes.find(c => c.id === cardId);
+                    if (card) {
+                        closeModal();
+                        openCreditCardsModal(card);
+                    }
+                }
+
+                if (deleteCardBtn) {
+                    const cardId = parseInt(deleteCardBtn.dataset.id);
+                    if (transactions.some(t => t.cartaoId === cardId)) {
+                        showFormError(modal.querySelector('#add-card-form'), 'name', 'Este cartão está em uso e não pode ser excluído.');
+                        return;
+                    }
+                    settings.cartoes = settings.cartoes.filter(c => c.id !== cardId);
+                    saveSettings();
+                    renderCards();
+                }
+            };
+
+            renderCards();
+            openModal(modal);
+        };
+        
+        const openReversalModal = (cardId) => {
+            const modal = document.getElementById('reversalModal');
+            const form = modal.querySelector('#reversal-form');
+            form.reset();
+            clearFormErrors(form);
+            form.querySelector('[name="cardId"]').value = cardId;
+            openModal(modal);
+        };
+
+        const openWhatsappModal = (message) => {
+            whatsappShareData = message;
+            const modal = document.getElementById('whatsappModal');
+            openModal(modal);
+        };
+        
+        const updateExpenseSortButtonsUI = () => {
+            const buttons = expenseSortContainer.querySelectorAll('.expense-sort-btn');
+            buttons.forEach(btn => {
+                btn.classList.remove('bg-blue-600', 'text-white', 'shadow-md');
+                btn.classList.add('bg-white', 'text-gray-700', 'border', 'border-gray-300', 'hover:bg-gray-100');
+                // Remove existing icons
+                const icon = btn.querySelector('i');
+                if (icon) {
+                    icon.remove();
+                }
+            });
+
+            const activeButton = expenseSortContainer.querySelector(`.expense-sort-btn[data-sort="${expenseSortState.key}"]`);
+            if (activeButton) {
+                activeButton.classList.add('bg-blue-600', 'text-white', 'shadow-md');
+                activeButton.classList.remove('bg-white', 'text-gray-700', 'border', 'border-gray-300', 'hover:bg-gray-100');
+
+                const icon = document.createElement('i');
+                icon.className = `fa-solid ${expenseSortState.order === 'asc' ? 'fa-arrow-up-long' : 'fa-arrow-down-long'} ml-2`;
+                activeButton.appendChild(icon);
+            }
+        };
+
+
+        function initializeAppUI() {
+            addTransactionBtn.onclick = () => openAddEditTransactionModal();
+            prevMonthBtn.onclick = () => { currentDate.setMonth(currentDate.getMonth() - 1); updateUIForMonth(); };
+            nextMonthBtn.onclick = () => { currentDate.setMonth(currentDate.getMonth() + 1); updateUIForMonth(); };
+            todayBtn.onclick = () => { currentDate = new Date(); updateUIForMonth(); };
+            
+            const showComingSoonModal = (title, message) => {
+                const modal = document.getElementById('genericConfirmModal');
+                modal.innerHTML = `
+                    <div class="p-6 text-center">
+                        <i class="fa-solid fa-cogs text-4xl text-blue-500 mb-4"></i>
+                        <h3 class="text-lg font-bold text-gray-800 mb-2">${title}</h3>
+                        <p class="text-sm text-gray-600 mb-6">${message}</p>
+                        <div class="flex justify-center gap-4">
+                            <button id="generic-confirm-btn" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700">OK</button>
+                        </div>
+                    </div>`;
+                modal.querySelector('#generic-confirm-btn').onclick = closeModal;
+                openModal(modal);
+            };
+
+            openCadastroHubBtn.onclick = () => {
+                const modal = document.getElementById('settingsHubModal');
+                modal.innerHTML = `
+                    <div class="p-6">
+                        <div class="flex justify-between items-center mb-6">
+                            <h2 class="text-xl font-semibold">Cadastros Gerais</h2>
+                            <button class="close-modal-btn text-gray-400 hover:text-gray-600"><i class="fa fa-times fa-lg"></i></button>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="settings-card cursor-pointer bg-gray-100 hover:bg-gray-200 p-4 rounded-lg text-center transition-all" id="open-types-btn">
+                                <i class="fa-solid fa-tags text-3xl mb-2 mx-auto text-blue-500"></i>
+                                <p class="text-sm font-medium">Gerenciar Tipos</p>
+                            </div>
+                            <div class="settings-card cursor-pointer bg-gray-100 hover:bg-gray-200 p-4 rounded-lg text-center transition-all" id="open-categories-btn">
+                                <i class="fa-solid fa-sitemap text-3xl mb-2 mx-auto text-indigo-500"></i>
+                                <p class="text-sm font-medium">Gerenciar Categorias</p>
+                            </div>
+                            <div class="settings-card cursor-pointer bg-gray-100 hover:bg-gray-200 p-4 rounded-lg text-center transition-all" id="open-credit-cards-btn">
+                                <i class="fa-solid fa-credit-card text-3xl mb-2 mx-auto text-green-500"></i>
+                                <p class="text-sm font-medium">Cartões de Crédito</p>
+                            </div>
+                            <div class="settings-card cursor-pointer bg-gray-100 hover:bg-gray-200 p-4 rounded-lg text-center transition-all" id="open-limits-btn">
+                                <i class="fa-solid fa-bullseye text-3xl mb-2 mx-auto text-yellow-500"></i>
+                                <p class="text-sm font-medium">Definir Limites</p>
+                            </div>
+                        </div>
+                    </div>`;
+
+                modal.querySelector('#open-types-btn').onclick = () => {
+                    closeModal();
+                    openTypesModal();
+                };
+                modal.querySelector('#open-categories-btn').onclick = () => {
+                    closeModal();
+                    openCategoriesModal();
+                };
+                modal.querySelector('#open-credit-cards-btn').onclick = () => {
+                    closeModal();
+                    openCreditCardsModal();
+                };
+                 modal.querySelector('#open-limits-btn').onclick = () => {
+                    closeModal();
+                    showComingSoonModal('Em Breve', 'Esta funcionalidade de definição de limites e metas de gastos será implementada em futuras atualizações.');
+                };
+                
+                openModal(modal);
+            };
+
+            openOptionsBtn.onclick = () => {
+                showComingSoonModal('Em Breve', 'A tela de opções avançadas será implementada em futuras atualizações.');
+            };
+
+            const handleTransactionClick = async (e) => {
+                console.log("Clique detectado na área da tabela.", e.target);
+                const editButton = e.target.closest('.edit-btn');
+                const deleteButton = e.target.closest('.delete-btn');
+                const quitButton = e.target.closest('.quit-btn');
+                const checkbox = e.target.closest('.select-transaction-checkbox');
+
+                if (checkbox) {
+                    const transactionId = checkbox.dataset.id;
+                    if (checkbox.checked) {
+                        if (!selectedTransactionIds.includes(transactionId)) {
+                            selectedTransactionIds.push(transactionId);
+                        }
+                    } else {
+                        selectedTransactionIds = selectedTransactionIds.filter(id => id !== transactionId);
+                    }
+                    updateBulkActionsUI();
+                }
+
+                if (quitButton) {
+                    const transactionId = quitButton.dataset.id;
+                    const transaction = transactions.find(t => t.id === transactionId);
+                    if (transaction) {
+                        transaction.pago = !transaction.pago;
+                        const docRef = doc(db, 'users', currentUser.uid, 'transactions', transactionId);
+                        await updateDoc(docRef, { pago: transaction.pago });
+                        updateUIForMonth();
+                    }
+                }
+                
+                if (editButton) {
+                    const transactionId = editButton.dataset.id;
+                    console.log("Botão Editar clicado para o ID:", transactionId);
+                    const transaction = transactions.find(t => t.id === transactionId);
+                    if (transaction) {
+                        console.log("Transação encontrada:", transaction);
+                        openAddEditTransactionModal(transaction);
+                    } else {
+                        console.error("Transação não encontrada para o ID:", transactionId);
+                    }
+                }
+
+                if (deleteButton) {
+                    const transactionId = deleteButton.dataset.id;
+                    const transaction = transactions.find(t => t.id === transactionId);
+                    if (transaction) openDeleteConfirmationModal(transaction);
+                }
+            };
+
+            incomeTableBody.addEventListener('click', handleTransactionClick);
+            expenseTableBody.addEventListener('click', handleTransactionClick);
+
+
+            faturasViewContent.addEventListener('click', async (e) => {
+                const quitGroupBtn = e.target.closest('.quit-group-btn');
+                const sortBtn = e.target.closest('.sort-btn');
+                const toggleListBtn = e.target.closest('.toggle-list-btn');
+                const whatsappBtn = e.target.closest('.whatsapp-share-btn');
+                const reversalBtn = e.target.closest('.reversal-btn');
+                const editInvoiceItemBtn = e.target.closest('.edit-invoice-item-btn');
+                const deleteInvoiceItemBtn = e.target.closest('.delete-invoice-item-btn');
+
+                if (editInvoiceItemBtn) {
+                    const transactionId = editInvoiceItemBtn.dataset.id;
+                    const transaction = transactions.find(t => t.id === transactionId);
+                    if (transaction) {
+                        openAddEditTransactionModal(transaction);
+                    }
+                    return;
+                }
+
+                if (deleteInvoiceItemBtn) {
+                    const transactionId = deleteInvoiceItemBtn.dataset.id;
+                    const transaction = transactions.find(t => t.id === transactionId);
+                    if (transaction) openDeleteConfirmationModal(transaction);
+                    return;
+                }
+
+                if (reversalBtn) {
+                    const cardId = reversalBtn.dataset.cardId;
+                    const card = settings.cartoes.find(c => c.id == cardId);
+                    openGenericConfirmModal({
+                        title: 'Lançar Estorno',
+                        message: `Você deseja lançar um novo estorno (crédito) na fatura do cartão <strong>${card.name}</strong>?`,
+                        onConfirm: () => {
+                            closeModal();
+                            openReversalModal(cardId);
+                        },
+                        confirmText: 'Lançar',
+                        iconClass: 'fa-solid fa-receipt text-indigo-500'
+                    });
+                    return;
+                }
+
+                if (toggleListBtn) {
+                    const listContainer = toggleListBtn.parentElement.querySelector('.invoice-list');
+                    listContainer.classList.toggle('expanded');
+                    toggleListBtn.textContent = listContainer.classList.contains('expanded') ? 'Ver menos' : 'Ver mais';
+                }
+
+                if(sortBtn) {
+                    const groupKey = sortBtn.dataset.groupKey;
+                    const sortBy = sortBtn.dataset.sort;
+                    invoiceSortState[groupKey] = sortBy;
+                    renderInvoicesView(getTransactionsForMonth(currentDate));
+                }
+                
+                if (whatsappBtn) {
+                    const groupType = whatsappBtn.dataset.groupType;
+                    const groupId = whatsappBtn.dataset.id;
+                    const subtitle = whatsappBtn.dataset.subtitle;
+                    const monthTransactions = getTransactionsForMonth(currentDate);
+                    let transactionsToShare = [];
+                    let cardTitle = '';
+
+                    if (groupType === 'card') {
+                        const cardId = parseInt(groupId);
+                        const card = settings.cartoes.find(c => c.id === cardId);
+                        cardTitle = `Fatura ${card.name}`;
+                        transactionsToShare = monthTransactions.filter(t => t.cartaoId === cardId);
+                    } else if (groupType === 'fixed') {
+                        cardTitle = 'Contas Fixas';
+                        transactionsToShare = monthTransactions.filter(t => t.recurring && !t.cartaoId && findTypeBy('id', t.tipoId)?.main === 'Despesa');
+                    } else if (groupType === 'installments') {
+                        cardTitle = 'Parcelas';
+                        transactionsToShare = monthTransactions.filter(t => t.installments && !t.cartaoId && findTypeBy('id', t.tipoId)?.main === 'Despesa');
+                    } else if (groupType === 'general') {
+                        cardTitle = 'Despesas Gerais';
+                        transactionsToShare = monthTransactions.filter(t => !t.cartaoId && findTypeBy('id', t.tipoId)?.main === 'Despesa');
+                    }
+
+                    if (transactionsToShare.length > 0) {
+                        let message = `*${cardTitle}*\n_${subtitle}_\n\n`;
+                        let total = 0;
+                        transactionsToShare.forEach(t => {
+                            const isEstorno = findTypeBy('id', t.tipoId)?.main === 'Estorno';
+                            let description = t.descricao;
+                            if (t.installments) {
+                                description += ` (${t.installments.current}/${t.installments.total})`;
+                            }
+                            message += `${description}: ${isEstorno ? '+' : ''}${formatCurrency(t.valor)}\n`;
+                            total += isEstorno ? -t.valor : t.valor;
+                        });
+                        message += `\n*Total: ${formatCurrency(total)}*`;
+                        
+                        openWhatsappModal(message);
+                    }
+                }
+
+                if (quitGroupBtn) {
+                    const groupType = quitGroupBtn.dataset.groupType;
+                    const monthTransactions = getTransactionsForMonth(currentDate);
+                    let transactionsToToggle = [];
+
+                    if (groupType === 'card') {
+                        const cardId = parseInt(quitGroupBtn.dataset.id);
+                        transactionsToToggle = monthTransactions.filter(t => t.cartaoId === cardId);
+                    } else if (groupType === 'fixed') {
+                        transactionsToToggle = monthTransactions.filter(t => t.recurring && !t.cartaoId && findTypeBy('id', t.tipoId)?.main === 'Despesa');
+                    } else if (groupType === 'installments') {
+                        transactionsToToggle = monthTransactions.filter(t => t.installments && !t.cartaoId && findTypeBy('id', t.tipoId)?.main === 'Despesa');
+                    } else if (groupType === 'general') {
+                        transactionsToToggle = monthTransactions.filter(t => !t.cartaoId && findTypeBy('id', t.tipoId)?.main === 'Despesa');
+                    }
+
+                    if (transactionsToToggle.length > 0) {
+                        const allPaid = transactionsToToggle.every(t => t.pago);
+                        for (const t of transactionsToToggle) {
+                            const globalTransaction = transactions.find(globalT => globalT.id === t.id);
+                            if (globalTransaction) {
+                                globalTransaction.pago = !allPaid;
+                                const docRef = doc(db, 'users', currentUser.uid, 'transactions', t.id);
+                                await updateDoc(docRef, { pago: !allPaid });
+                            }
+                        }
+                        updateUIForMonth();
+                    }
+                }
+            });
+
+
+            filterContainer.addEventListener('click', (e) => {
+                const filterBtn = e.target.closest('.filter-btn');
+                if (filterBtn) {
+                    currentFilter = filterBtn.dataset.filter;
+                    document.querySelectorAll('.filter-btn').forEach(btn => {
+                        btn.classList.remove('filter-btn-active', 'text-gray-600');
+                        if (btn.dataset.filter === currentFilter) {
+                            btn.classList.add('filter-btn-active');
+                        } else {
+                            btn.classList.add('text-gray-600');
+                        }
+                    });
+                    updateUIForMonth();
+                }
+            });
+
+            expenseSortContainer.addEventListener('click', (e) => {
+                const sortBtn = e.target.closest('.expense-sort-btn');
+                if (sortBtn) {
+                    const sortKey = sortBtn.dataset.sort;
+                    if (expenseSortState.key === sortKey) {
+                        expenseSortState.order = expenseSortState.order === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        expenseSortState.key = sortKey;
+                        expenseSortState.order = 'asc';
+                    }
+                    updateExpenseSortButtonsUI();
+                    updateUIForMonth();
+                }
+            });
+
+            selectAllExpensesCheckbox.addEventListener('change', (e) => {
+                const checkboxes = expenseTableBody.querySelectorAll('.select-transaction-checkbox');
+                selectedTransactionIds = []; 
+                const isChecked = e.target.checked;
+
+                checkboxes.forEach(checkbox => {
+                    const transactionId = checkbox.dataset.id;
+                    const transaction = transactions.find(t => t.id === transactionId);
+                    if (isChecked && transaction && !transaction.pago) {
+                        checkbox.checked = true;
+                        selectedTransactionIds.push(transactionId);
+                    } else {
+                        checkbox.checked = false;
+                    }
+                });
+
+                updateBulkActionsUI();
+            });
+
+            quitOpenBtn.onclick = async () => {
+                const selectedToQuit = selectedTransactionIds
+                    .map(id => transactions.find(t => t.id === id))
+                    .filter(t => t && !t.pago);
+                
+                openGenericConfirmModal({
+                    title: 'Quitar Transações',
+                    message: `Você tem certeza que deseja quitar ${selectedToQuit.length} transações em aberto?`,
+                    onConfirm: async () => {
+                        for (const transaction of selectedToQuit) {
+                            transaction.pago = true;
+                            const docRef = doc(db, 'users', currentUser.uid, 'transactions', transaction.id);
+                            await updateDoc(docRef, { pago: true });
+                        }
+                        updateUIForMonth();
+                        closeModal();
+                    },
+                    confirmText: 'Quitar',
+                    confirmClass: 'bg-green-600 hover:bg-green-700',
+                    iconClass: 'fa-solid fa-check-double text-green-500'
+                });
+            };
+
+            reversePaidBtn.onclick = async () => {
+                 const selectedToReverse = selectedTransactionIds
+                    .map(id => transactions.find(t => t.id === id))
+                    .filter(t => t && t.pago && findTypeBy('id', t.tipoId)?.main !== 'Estorno');
+
+                openGenericConfirmModal({
+                    title: 'Estornar Transações',
+                    message: `Você tem certeza que deseja estornar ${selectedToReverse.length} transações pagas? Um novo lançamento de crédito será criado para cada uma.`,
+                    onConfirm: async () => {
+                        const estornoTypeId = settings.tipos.find(t => t.main === 'Estorno')?.id;
+                        if (!estornoTypeId) return;
+                        
+                        const transactionsColRef = collection(db, 'users', currentUser.uid, 'transactions');
+                        for (const transaction of selectedToReverse) {
+                             const reversalData = {
+                                descricao: `Estorno de: ${transaction.descricao}`,
+                                valor: transaction.valor,
+                                data: new Date().toISOString().split('T')[0],
+                                tipoId: estornoTypeId,
+                                categoria: 'Estorno Cartão',
+                                cartaoId: transaction.cartaoId,
+                                pago: true
+                            };
+                            const docRef = await addDoc(transactionsColRef, reversalData);
+                            transactions.push({ ...reversalData, id: docRef.id });
+                        }
+                        updateUIForMonth();
+                        closeModal();
+                    },
+                    confirmText: 'Estornar',
+                    confirmClass: 'bg-orange-500 hover:bg-orange-600',
+                    iconClass: 'fa-solid fa-receipt text-orange-500'
+                });
+            };
+
+            const openReportBtn = document.getElementById('openReportBtn');
+
+            openReportBtn.addEventListener('click', () => {
+                window.location.href = 'projecao.html';
+            });
+            
+            document.getElementById('reversal-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const form = e.target;
+                clearFormErrors(form);
+                const valorNum = parseCurrency(form.valor.value);
+                if (isNaN(valorNum) || valorNum <= 0) {
+                    showFormError(form, 'valor', 'Valor inválido.');
+                    return;
+                }
+
+                const estornoTypeId = settings.tipos.find(t => t.main === 'Estorno')?.id;
+                if (!estornoTypeId) {
+                    console.error("Tipo 'Estorno' não encontrado.");
+                    return;
+                }
+
+                const transactionData = {
+                    descricao: form.descricao.value,
+                    valor: valorNum,
+                    data: currentDate.toISOString().split('T')[0],
+                    tipoId: estornoTypeId,
+                    categoria: 'Estorno Cartão',
+                    cartaoId: parseInt(form.cardId.value),
+                    pago: true 
+                };
+
+                const transactionsColRef = collection(db, 'users', currentUser.uid, 'transactions');
+                const docRef = await addDoc(transactionsColRef, transactionData);
+                transactions.push({ ...transactionData, id: docRef.id });
+
+                updateUIForMonth();
+                closeModal();
+            });
+
+            const switchTab = (activeTab) => {
+                const tabs = ['lancamentos', 'faturas'];
+                tabs.forEach(tab => {
+                    const tabBtn = document.getElementById(`tab-${tab}`);
+                    const tabContent = document.getElementById(`tab-content-${tab}`);
+                    if (tab === activeTab) {
+                        tabBtn.classList.add('tab-active');
+                        tabBtn.classList.remove('tab-inactive');
+                        tabContent.classList.remove('hidden');
+                    } else {
+                        tabBtn.classList.add('tab-inactive');
+                        tabBtn.classList.remove('tab-active');
+                        tabContent.classList.add('hidden');
+                    }
+                });
+                btnAgrupar.classList.toggle('hidden', activeTab !== 'faturas');
+            };
+
+            tabLancamentos.onclick = () => switchTab('lancamentos');
+            tabFaturas.onclick = () => switchTab('faturas');
+            
+            document.getElementById('whatsapp-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                const phone = document.getElementById('whatsapp-phone').value.replace(/\D/g, '');
+                if (phone && whatsappShareData) {
+                    const encodedMessage = encodeURIComponent(whatsappShareData);
+                    const whatsappUrl = `https://api.whatsapp.com/send?phone=${phone}&text=${encodedMessage}`;
+                    window.open(whatsappUrl, '_blank');
+                    closeModal();
+                    document.getElementById('whatsapp-phone').value = '';
+                }
+            });
+
+            document.querySelectorAll('.toggle-collapse-btn').forEach(button => {
+                button.addEventListener('click', () => {
+                    const targetId = button.dataset.target;
+                    const content = document.getElementById(targetId);
+                    const icon = button.querySelector('i');
+                    content.classList.toggle('collapsed');
+                    icon.classList.toggle('fa-chevron-up');
+                    icon.classList.toggle('fa-chevron-down');
+                });
+            });
+
+            document.getElementById('share-unpaid-btn').addEventListener('click', () => {
+                const monthTransactions = getTransactionsForMonth(currentDate);
+                const unpaidExpenses = monthTransactions.filter(t => {
+                    const tipo = findTypeBy('id', t.tipoId);
+                    return (tipo?.main === 'Despesa' || tipo?.main === 'Investimento') && !t.pago;
+                });
+
+                if (unpaidExpenses.length === 0) {
+                    openGenericConfirmModal({
+                        title: 'Tudo em dia!',
+                        message: 'Você não possui despesas em aberto para este mês.',
+                        confirmText: 'Ok',
+                        iconClass: 'fa-solid fa-check-circle text-green-500'
+                    });
+                    // Remove the cancel button logic for this specific modal
+                    const modal = document.getElementById('genericConfirmModal');
+                    modal.querySelector('#generic-cancel-btn').style.display = 'none';
+                    modal.querySelector('#generic-confirm-btn').onclick = closeModal;
+                    return;
+                }
+
+                let message = `*Despesas em Aberto - ${currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}*\n\n`;
+                let totalUnpaid = 0;
+                unpaidExpenses.sort((a,b) => new Date(a.data) - new Date(b.data));
+
+                unpaidExpenses.forEach(t => {
+                    const data = new Date(t.data + 'T00:00:00').toLocaleDateString('pt-BR');
+                    message += `${data} - ${t.descricao}: ${formatCurrency(t.valor)}\n`;
+                    totalUnpaid += t.valor;
+                });
+                message += `\n*Total a Pagar: ${formatCurrency(totalUnpaid)}*`;
+                
+                openWhatsappModal(message);
+            });
+
+            updateUIForMonth();
+            updateExpenseSortButtonsUI();
+            document.body.addEventListener('click', (e) => {
+                if (e.target.closest('.close-modal-btn')) {
+                    closeModal();
+                }
+            });
+            modalBackdrop.onclick = closeModal;
+        }
+
+        // --- NOVA LÓGICA DE INICIALIZAÇÃO ---
+        async function setupAndListen() {
+            if (!auth) {
+                console.error("Firebase Auth não foi inicializado.");
+                loadingContainer.style.display = 'none';
+                authContainer.style.display = 'flex';
+                return;
+            }
+
+            try {
+                await setPersistence(auth, browserLocalPersistence);
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        currentUser = user;
+                        await loadUserData();
+                        initializeAppUI();
+                        mainAppContainer.style.display = 'block';
+                        authContainer.style.display = 'none';
+                    } else {
+                        currentUser = null;
+                        mainAppContainer.style.display = 'none';
+                        authContainer.style.display = 'flex';
+                        transactions = [];
+                        settings = {};
+                    }
+                    loadingContainer.style.display = 'none';
+                });
+
+            } catch (error) {
+                console.error("Erro ao definir persistência ou listener de autenticação:", error);
+                loadingContainer.style.display = 'none';
+                authContainer.style.display = 'flex';
+            }
+        }
+
+        function main() {
+            const savedEnv = localStorage.getItem('firebaseEnv') || 'prd';
+            
+            try {
+                const services = initFirebase(savedEnv);
+                auth = services.auth;
+                db = services.db;
+            } catch (error) {
+                console.error("Falha ao inicializar o Firebase:", error);
+                loadingContainer.style.display = 'none';
+                authContainer.innerHTML = '<p class="text-red-500">Erro ao inicializar o ambiente do aplicativo.</p>';
+                authContainer.style.display = 'flex';
+                return;
+            }
+
+            document.querySelector(`input[name="firebase-env"][value="${savedEnv}"]`).checked = true;
+
+            envRadios.forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    const newEnv = e.target.value;
+                    if (auth && auth.currentUser) {
+                        signOut(auth).then(() => {
+                            localStorage.setItem('firebaseEnv', newEnv);
+                            window.location.reload();
+                        });
+                    } else {
+                        localStorage.setItem('firebaseEnv', newEnv);
+                        window.location.reload();
+                    }
+                });
+            });
+
+            setupAndListen();
+        }
+
+        main();
+
+    </script>
+</body>
+</html>
