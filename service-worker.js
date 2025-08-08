@@ -1,44 +1,46 @@
-// Define o nome e a versão do cache. Mudar a versão aqui força a atualização de todos os ficheiros.
-const CACHE_NAME = "financeiro-cache-v2";
+// service-worker.js - VERSÃO CORRIGIDA
 
-// Lista de ficheiros essenciais para a aplicação funcionar offline.
-// Use caminhos relativos para garantir que funciona em qualquer ambiente.
+const CACHE_NAME = 'finance-control-pro-v1';
+// Lista de arquivos a serem cacheados.
+// CORREÇÃO: Caminhos ajustados para serem relativos à raiz do projeto.
 const urlsToCache = [
-  './',
-  './index.html',
-  './projecao.html',
-  './firebase-config.js',
-  './manifest.json',
-  './icons/icon-192.png',
-  './icons/icon-512.png'
+  '/',
+  'index.html',
+  'reports.html',
+  'main.js',
+  'reports.js',
+  'firebase-config.js',
+  'manifest.json',
+  'https://cdn.tailwindcss.com',
+  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css',
+  'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'
 ];
 
-// Evento 'install': Guarda os ficheiros essenciais em cache.
-self.addEventListener("install", event => {
+// Evento de Instalação: abre o cache e adiciona os arquivos principais.
+self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log("Service Worker: Cache aberto e a guardar ficheiros essenciais.");
-        // O addAll faz o download e guarda todos os ficheiros da lista.
-        // Se um deles falhar, a instalação inteira falha.
-        return cache.addAll(urlsToCache);
-      })
-      .catch(error => {
-          console.error("Service Worker: Falha ao guardar ficheiros no cache durante a instalação.", error);
+        console.log('Cache aberto');
+        return cache.addAll(urlsToCache).catch(error => {
+            console.error('Falha ao adicionar arquivos ao cache:', error);
+            // Isso ajuda a identificar qual URL específica pode estar falhando.
+            urlsToCache.forEach(url => {
+                fetch(url).catch(err => console.error(`Falha ao buscar: ${url}`, err));
+            });
+        });
       })
   );
 });
 
-// Evento 'activate': Limpa os caches antigos.
-// Isto é crucial para garantir que os utilizadores recebem as atualizações.
+// Evento de Ativação: limpa caches antigos.
 self.addEventListener('activate', event => {
+  const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames.map(cacheName => {
-          // Se o nome do cache não for o atual, ele é apagado.
-          if (cacheName !== CACHE_NAME) {
-            console.log('Service Worker: A limpar cache antigo:', cacheName);
+          if (cacheWhitelist.indexOf(cacheName) === -1) {
             return caches.delete(cacheName);
           }
         })
@@ -47,14 +49,18 @@ self.addEventListener('activate', event => {
   );
 });
 
-// Evento 'fetch': Interceta os pedidos de rede e serve a partir do cache primeiro.
-self.addEventListener("fetch", event => {
+// Evento de Fetch: serve arquivos do cache ou da rede.
+self.addEventListener('fetch', event => {
   event.respondWith(
-    // Tenta encontrar o pedido no cache.
-    caches.match(event.request).then(response => {
-      // Se encontrar no cache (response !== null), retorna a versão guardada.
-      // Se não, faz o pedido à rede.
-      return response || fetch(event.request);
-    })
+    caches.match(event.request)
+      .then(response => {
+        // Se o arquivo for encontrado no cache, retorna ele.
+        if (response) {
+          return response;
+        }
+        // Caso contrário, busca na rede.
+        return fetch(event.request);
+      }
+    )
   );
 });

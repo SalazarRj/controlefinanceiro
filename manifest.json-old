@@ -1,0 +1,62 @@
+// {
+//   "name": "Central de Controle Financeiro PRO",
+//   "short_name": "Controle PRO",
+//   "description": "A sua aplicação completa para gestão de finanças pessoais.",
+//   "start_url": "/index.html",
+//   "display": "standalone",
+//   "background_color": "#f0f2f5",
+//   "theme_color": "#3b82f6",
+//   "icons": [
+//     {
+//       "src": "icons/icon-192.png",
+//       "type": "image/png",
+//       "sizes": "192x192"
+//     },
+//     {
+//       "src": "icons/icon-512.png",
+//       "type": "image/png",
+//       "sizes": "512x512"
+//     }
+//   ]
+// }
+
+{
+  "name": "Controle Financeiro PRO",
+  "short_name": "Controle PRO",
+  "description": "A sua aplicação completa para gestão de finanças pessoais.",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#f0f2f5",
+  "theme_color": "#3b82f6",
+  "orientation": "portrait-primary",
+  "id": "/?v=1",
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/screenshot1.png",
+      "type": "image/png",
+      "sizes": "1080x1920",
+      "form_factor": "narrow"
+    },
+    {
+      "src": "/screenshots/screenshot2.png",
+      "type": "image/png",
+      "sizes": "1080x1920",
+      "form_factor": "narrow"
+    }
+  ]
+}

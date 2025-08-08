@@ -24,17 +24,29 @@
 
 // firebase-config.js
 // firebase-config.js
+// firebase-config.js
 
-import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-app.js";
-import { getAuth } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-auth.js";
-import { getFirestore } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore.js";
+import {
+  initializeApp,
+  getApps,
+  getApp
+} from "https://www.gstatic.com/firebasejs/9.6.10/firebase-app.js";
 
+import {
+  getAuth
+} from "https://www.gstatic.com/firebasejs/9.6.10/firebase-auth.js";
+
+import {
+  getFirestore
+} from "https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore.js";
+
+// Configurações separadas por ambiente
 const firebaseConfigs = {
   prd: {
     apiKey: "AIzaSyB6Vm00Mp5RjAEQrmgStWr4dSg6gqJj01A",
     authDomain: "controlefinanceirosalazar.firebaseapp.com",
     projectId: "controlefinanceirosalazar",
-    storageBucket: "controlefinanceirosalazar.firebasestorage.app",
+    storageBucket: "controlefinanceirosalazar.appspot.com",
     messagingSenderId: "323202353724",
     appId: "1:323202353724:web:6880c23ce9029bc3231139",
     measurementId: "G-L1QY3W9Q76"
@@ -43,33 +55,29 @@ const firebaseConfigs = {
     apiKey: "AIzaSyDx8KZx22rHksVMxJiFFX6CR1bHa0vUAnA",
     authDomain: "controlefinanceirosalazarhml.firebaseapp.com",
     projectId: "controlefinanceirosalazarhml",
-    storageBucket: "controlefinanceirosalazarhml.firebasestorage.app",
+    storageBucket: "controlefinanceirosalazarhml.appspot.com",
     messagingSenderId: "775400698227",
     appId: "1:775400698227:web:7f36bdc26d8a9cacc51506",
     measurementId: "G-6ZX7JVETJS"
   }
 };
 
+// Função de inicialização dinâmica do Firebase
 export function initFirebase(env = 'prd') {
   if (!firebaseConfigs[env]) {
-    throw new Error(`Ambiente Firebase "${env}" não configurado`);
+    throw new Error(`Ambiente Firebase "${env}" não está configurado.`);
   }
 
-  console.log(`Inicializando Firebase para o ambiente: ${env.toUpperCase()}`);
+  console.log(`🔧 Inicializando Firebase para o ambiente: ${env.toUpperCase()}`);
 
+  const config = firebaseConfigs[env];
   const appName = env;
-  let app;
-  
-  // Verifica se a aplicação para este ambiente já existe
-  const existingApp = getApps().find(a => a.name === appName);
 
-  if (existingApp) {
-    app = existingApp;
-  } else {
-    // Inicializa uma nova aplicação com um nome único para o ambiente
-    app = initializeApp(firebaseConfigs[env], appName);
-  }
-  
+  // Evita múltiplas inicializações com o mesmo nome
+  const existingApp = getApps().find(a => a.name === appName);
+  const app = existingApp || initializeApp(config, appName);
+
+  // Inicializa os serviços
   const auth = getAuth(app);
   const db = getFirestore(app);
 

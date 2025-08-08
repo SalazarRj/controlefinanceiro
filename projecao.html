@@ -1,534 +1,723 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Projeção Financeira</title>
+    <title>Projeção Financeira | Controle PRO</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        body { 
-            font-family: 'Inter', sans-serif; 
+        body {
+            font-family: 'Inter', sans-serif;
             background-color: #f8fafc; /* bg-slate-50 */
         }
-        .card { 
-            transition: transform 0.3s ease, box-shadow 0.3s ease; 
+        .card {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
-        .card:hover { 
+        .card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.07), 0 4px 6px -4px rgb(0 0 0 / 0.07);
         }
-        .projection-list {
-            max-height: 240px;
-            overflow-y: auto;
-            scrollbar-width: thin;
-            scrollbar-color: #cbd5e1 #f1f5f9;
+        .projection-list, .detailed-analysis-table-container, .category-card-details, .main-projection-table-container {
+            max-height: 240px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #cbd5e1 #f1f5f9;
         }
-        .projection-list.expanded {
-            max-height: 500px;
+        .projection-list.expanded { max-height: 500px; }
+        .projection-list::-webkit-scrollbar, .detailed-analysis-table-container::-webkit-scrollbar, .category-card-details::-webkit-scrollbar, .main-projection-table-container::-webkit-scrollbar { width: 6px; }
+        .projection-list::-webkit-scrollbar-track, .detailed-analysis-table-container::-webkit-scrollbar-track, .category-card-details::-webkit-scrollbar-track, .main-projection-table-container::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 10px; }
+        .projection-list::-webkit-scrollbar-thumb, .detailed-analysis-table-container::-webkit-scrollbar-thumb, .category-card-details::-webkit-scrollbar-thumb, .main-projection-table-container::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
+        
+        .control-btn { transition: all 0.2s ease-in-out; }
+        .control-btn-active {
+            background-color: #4f46e5; /* bg-indigo-600 */ color: white;
+            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
         }
-        /* Custom scrollbar for webkit browsers */
-        .projection-list::-webkit-scrollbar {
-            width: 6px;
+        
+        .tab-active { 
+            border-color: #4f46e5; /* border-indigo-600 */
+            color: #4f46e5; /* text-indigo-600 */
+            font-weight: 600; /* semibold */
         }
-        .projection-list::-webkit-scrollbar-track {
-            background: #f1f5f9;
-            border-radius: 10px;
+        .tab-inactive { 
+            border-color: transparent; 
+            color: #64748b; /* text-slate-500 */
         }
-        .projection-list::-webkit-scrollbar-thumb {
-            background-color: #cbd5e1;
-            border-radius: 10px;
-        }
+        
+        #sidebar.collapsed .sidebar-text, #sidebar.collapsed .sidebar-user-details { display: none; }
+        #sidebar.collapsed .justify-between { justify-content: center; }
+        #sidebar.collapsed #logoutBtn { width: 100%; }
+        #sidebar.collapsed #sidebar-user-info { padding-left: 0; padding-right: 0; }
     </style>
 </head>
-<body class="min-h-screen flex flex-col">
+<body class="bg-slate-50">
 
-    <header class="bg-white/80 backdrop-blur-lg shadow-sm p-4 flex justify-between items-center sticky top-0 z-30">
-        <h1 class="text-2xl font-bold text-slate-800">Projeções</h1>
-        <div class="flex gap-2 items-center">
-            <a href="index.html" class="text-slate-500 hover:text-indigo-600 transition-colors h-10 w-10 flex items-center justify-center rounded-full hover:bg-slate-100" title="Voltar">
-                <i class="fa-solid fa-arrow-left fa-lg"></i>
-            </a>
-            <button id="exportCsvBtn" class="text-slate-500 hover:text-green-600 transition-colors h-10 w-10 flex items-center justify-center rounded-full hover:bg-slate-100" title="Exportar CSV">
-                <i class="fa-solid fa-file-csv fa-lg"></i>
-            </button>
-            <button id="logoutBtn" class="text-slate-500 hover:text-red-600 transition-colors h-10 w-10 flex items-center justify-center rounded-full hover:bg-slate-100" title="Sair">
-                <i class="fa-solid fa-right-from-bracket fa-lg"></i>
-            </button>
-        </div>
-    </header>
-
-    <main id="projection-content" class="flex-grow container mx-auto p-4 md:p-6">
-        <!-- Estado de Carregamento -->
-        <div id="loading-state" class="text-center py-20">
-            <i class="fa-solid fa-spinner fa-spin fa-3x text-indigo-500"></i>
-            <p class="mt-4 text-slate-600">Carregando projeções...</p>
-        </div>
-        
-        <!-- Conteúdo Principal (inicialmente oculto) -->
-        <div id="content-container" class="hidden">
-            <!-- Filtros -->
-            <div class="bg-white p-4 rounded-xl shadow-md mb-6">
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                    <div>
-                        <label for="filter-tipo" class="block text-sm font-medium text-slate-700">Tipo</label>
-                        <select id="filter-tipo" class="mt-1 block w-full py-2 px-3 border border-slate-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"></select>
-                    </div>
-                    <div>
-                        <label for="filter-cartao" class="block text-sm font-medium text-slate-700">Cartão</label>
-                        <select id="filter-cartao" class="mt-1 block w-full py-2 px-3 border border-slate-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"></select>
-                    </div>
-                    <div>
-                        <label for="filter-mes" class="block text-sm font-medium text-slate-700">Mês</label>
-                        <select id="filter-mes" class="mt-1 block w-full py-2 px-3 border border-slate-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"></select>
-                    </div>
-                    <button id="clear-filters-btn" class="bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-md hover:bg-slate-300 transition-colors flex items-center justify-center gap-2">
-                        <i class="fa-solid fa-eraser"></i> Limpar
+    <div id="app-wrapper">
+        <div class="flex min-h-screen">
+            <aside id="sidebar" class="bg-gray-800 text-white w-64 p-4 flex-shrink-0 fixed h-full transform -translate-x-full md:translate-x-0 transition-all duration-300 ease-in-out z-40 flex flex-col">
+                <div class="flex items-center justify-between mb-10">
+                    <h2 class="text-2xl font-bold sidebar-text">Controle PRO</h2>
+                    <button id="collapse-sidebar-btn" class="hidden md:block p-2 rounded-md hover:bg-gray-700">
+                        <i class="fa-solid fa-bars"></i>
+                    </button>
+                    <button id="close-sidebar-mobile-btn" class="md:hidden p-2 rounded-md hover:bg-gray-700">
+                        <i class="fa-solid fa-times"></i>
                     </button>
                 </div>
-            </div>
 
-            <!-- Gráfico de Projeção -->
-            <div class="bg-white p-4 sm:p-6 rounded-xl shadow-md mb-6">
-                <h2 id="projection-chart-title" class="text-lg font-semibold text-slate-700 mb-4">Projeção de Despesas Mensais</h2>
-                <div class="h-80 md:h-96">
-                    <canvas id="projectionChart"></canvas>
+                <nav id="sidebar-nav" class="flex-grow">
+                    <a href="index.html" class="flex items-center gap-4 p-3 rounded-lg hover:bg-gray-700 transition-colors">
+                        <i class="fa-solid fa-tachometer-alt fa-fw w-6 text-center"></i>
+                        <span class="sidebar-text font-medium">Home</span>
+                    </a>
+                    <a href="projecao.html" class="flex items-center gap-4 p-3 rounded-lg bg-gray-900 transition-colors mt-2">
+                        <i class="fa-solid fa-chart-line fa-fw w-6 text-center"></i>
+                        <span class="sidebar-text font-medium">Relatórios</span>
+                    </a>
+                </nav>
+
+                <div id="sidebar-user-info" class="pt-4 border-t border-gray-700">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-full bg-indigo-500 flex-shrink-0 flex items-center justify-center font-bold">
+                            <i class="fa-solid fa-user"></i>
+                        </div>
+                        <div class="sidebar-user-details flex-grow overflow-hidden">
+                            <p id="user-name-display-sidebar" class="text-sm font-semibold truncate">carregando...</p>
+                            <p class="text-xs text-gray-400">Usuário</p>
+                        </div>
+                        <button id="logoutBtn" title="Sair" class="flex-shrink-0 p-2 rounded-md hover:bg-rose-600 text-gray-300 hover:text-white transition-colors">
+                            <i class="fa-solid fa-right-from-bracket"></i>
+                        </button>
+                    </div>
                 </div>
-            </div>
+            </aside>
+            
+            <main id="main-content" class="flex-1 transition-all duration-300 ease-in-out md:pl-64">
+                <div class="container mx-auto p-4 md:p-8">
+                    <header class="mb-8 flex justify-between items-center gap-4">
+                        <div class="flex items-center gap-4">
+                             <button id="open-sidebar-mobile-btn" class="md:hidden p-2 rounded-md text-slate-600 hover:bg-slate-200">
+                                <i class="fa-solid fa-bars fa-lg"></i>
+                            </button>
+                             <a href="index.html" class="hidden sm:flex text-slate-500 hover:text-indigo-600 transition-colors h-11 w-11 items-center justify-center rounded-full hover:bg-slate-200" title="Voltar ao Dashboard">
+                                <i class="fa-solid fa-arrow-left fa-lg"></i>
+                            </a>
+                            <div>
+                                <h1 class="text-3xl font-bold text-slate-800">Gestão de Projeções</h1>
+                                <p class="text-slate-500 mt-1 text-base">Analise suas finanças futuras e tome decisões inteligentes.</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <button id="exportPdfBtn" class="hidden text-slate-500 bg-white hover:text-rose-600 transition-colors h-11 w-11 flex items-center justify-center rounded-lg shadow-sm border border-slate-200 hover:bg-slate-100" title="Exportar PDF">
+                                <i class="fa-solid fa-file-pdf fa-lg"></i>
+                            </button>
+                            <button id="exportCsvBtn" class="text-slate-500 bg-white hover:text-emerald-600 transition-colors h-11 w-11 flex items-center justify-center rounded-lg shadow-sm border border-slate-200 hover:bg-slate-100" title="Exportar CSV">
+                                <i class="fa-solid fa-file-csv fa-lg"></i>
+                            </button>
+                        </div>
+                    </header>
 
-            <div id="cards-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:items-start">
-                <!-- Cards de Projeção -->
-            </div>
-        </div>
-    </main>
+                    <div class="border-b border-slate-200 mb-8">
+                         <nav class="-mb-px flex space-x-6" aria-label="Tabs">
+                             <button id="show-projection-btn" class="whitespace-nowrap pb-3 px-1 border-b-2 font-semibold text-base tab-active">
+                                 <i class="fa-solid fa-chart-line mr-2"></i> Projeção Futura
+                             </button>
+                             <button id="show-analysis-btn" class="whitespace-nowrap pb-3 px-1 border-b-2 font-semibold text-base tab-inactive">
+                                <i class="fa-solid fa-magnifying-glass-chart mr-2"></i> Análise Detalhada
+                             </button>
+                         </nav>
+                     </div>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-app.js";
-        import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-auth.js";
-        import { getFirestore, collection, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore.js";
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyB6Vm00Mp5RjAEQrmgStWr4dSg6gqJj01A",
-            authDomain: "controlefinanceirosalazar.firebaseapp.com",
-            projectId: "controlefinanceirosalazar",
-            storageBucket: "controlefinanceirosalazar.appspot.com",
-            messagingSenderId: "323202353724",
-            appId: "1:323202353724:web:e9c1a0c3b8f1d2e3f4a5b6"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-
-        const logoutBtn = document.getElementById("logoutBtn");
-        const loadingState = document.getElementById("loading-state");
-        const cardsContainer = document.getElementById("cards-container");
-        const contentContainer = document.getElementById("content-container");
-        const filterTipo = document.getElementById("filter-tipo");
-        const filterCartao = document.getElementById("filter-cartao");
-        const filterMes = document.getElementById("filter-mes");
-        const clearFiltersBtn = document.getElementById("clear-filters-btn");
-        const exportCsvBtn = document.getElementById("exportCsvBtn");
-        let projectionChart = null;
-        
-        logoutBtn.addEventListener('click', () => signOut(auth));
-
-        function formatCurrency(value) {
-            return (Number(value) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-        }
-
-        function populateMonthFilter() {
-            filterMes.innerHTML = '<option value="all">Todos os Meses</option>';
-            const now = new Date();
-            for (let i = 0; i < 12; i++) {
-                const date = new Date(now.getFullYear(), now.getMonth() + i, 1);
-                const monthName = date.toLocaleString('pt-BR', { month: 'long' });
-                const year = date.getFullYear();
-                const optionValue = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-                filterMes.innerHTML += `<option value="${optionValue}">${monthName.charAt(0).toUpperCase() + monthName.slice(1)} de ${year}</option>`;
-            }
-        }
-
-        onAuthStateChanged(auth, async (user) => {
-            if (!user) {
-                window.location.href = "index.html";
-                return;
-            }
-
-            try {
-                const settingsDocRef = doc(db, 'users', user.uid, 'data', 'settings');
-                const settingsDoc = await getDoc(settingsDocRef);
-                const settings = settingsDoc.exists() ? settingsDoc.data() : {};
-                const tipos = settings.tipos || [];
-                const cartoes = settings.cartoes || [];
-
-                const transactionsRef = collection(db, 'users', user.uid, 'transactions');
-                const snapshot = await getDocs(transactionsRef);
-                const allTransactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                
-                filterTipo.innerHTML = '<option value="all">Todos os Tipos</option>';
-                tipos.filter(t => ['Despesa', 'Investimento'].includes(t.main)).forEach(t => {
-                    filterTipo.innerHTML += `<option value="${t.id}">${t.name}</option>`;
-                });
-
-                filterCartao.innerHTML = '<option value="all">Todos os Cartões</option>';
-                cartoes.forEach(c => {
-                    filterCartao.innerHTML += `<option value="${c.id}">${c.name}</option>`;
-                });
-
-                populateMonthFilter();
-
-                const applyFiltersAndRender = () => {
-                    const selectedTipoId = filterTipo.value;
-                    const selectedCard = filterCartao.value;
-                    const selectedMonth = filterMes.value;
-
-                    // Filtros para os cards de projeção (ignora o filtro de mês)
-                    const cardFilteredTransactions = allTransactions.filter(t => {
-                        const tipo = tipos.find(tipo => tipo.id === t.tipoId);
-                        const mainType = tipo ? tipo.main : '';
-                        if (!['Despesa', 'Investimento'].includes(mainType)) return false;
-                        
-                        const tipoMatch = selectedTipoId === 'all' || t.tipoId.toString() === selectedTipoId;
-                        const cartaoMatch = selectedCard === 'all' || (t.cartaoId && t.cartaoId.toString() === selectedCard);
-
-                        return tipoMatch && cartaoMatch;
-                    });
-
-                    // Filtros para o gráfico (começa com os dados já filtrados para os cards e adiciona o filtro de mês)
-                    const chartFilteredTransactions = cardFilteredTransactions.filter(t => {
-                        const tDate = new Date(t.data + "T00:00:00");
-                        const transactionMonth = `${tDate.getFullYear()}-${String(tDate.getMonth() + 1).padStart(2, '0')}`;
-                        const monthMatch = selectedMonth === 'all' || transactionMonth === selectedMonth;
-                        return monthMatch;
-                    });
-
-                    // Renderiza os cards de projeção sempre, com base nos filtros de tipo e cartão
-                    renderProjections(cardFilteredTransactions, cartoes);
+                    <div id="loading-state" class="text-center py-20">
+                        <i class="fa-solid fa-spinner fa-spin fa-3x text-indigo-500"></i>
+                        <p class="mt-4 text-slate-600 text-lg">A carregar projeções...</p>
+                    </div>
                     
-                    // Renderiza o gráfico com base em todos os filtros
-                    renderProjectionChart(chartFilteredTransactions, tipos, cartoes, selectedCard, selectedTipoId, selectedMonth);
-                };
-                
-                [filterTipo, filterCartao, filterMes].forEach(el => el.addEventListener('change', applyFiltersAndRender));
-                
-                clearFiltersBtn.addEventListener('click', () => {
-                    filterTipo.value = 'all';
-                    filterCartao.value = 'all';
-                    filterMes.value = 'all';
-                    applyFiltersAndRender();
-                });
-                exportCsvBtn.addEventListener('click', () => exportToCSV(allTransactions, tipos, cartoes));
+                    <div id="content-container" class="hidden">
+                        <div id="projection-view">
+                            <div id="main-filters-card" class="bg-white p-5 rounded-xl shadow-md mb-8">
+                                <h3 class="text-lg font-semibold text-slate-700 mb-4">Filtros da Projeção</h3>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4 items-end">
+                                    <div class="xl:col-span-1"><label for="filter-tipo" class="block text-sm font-medium text-slate-600">Tipo</label><select id="filter-tipo" class="mt-1 block w-full py-2 px-3 border border-slate-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"></select></div>
+                                    <div class="xl:col-span-1"><label for="filter-categoria" class="block text-sm font-medium text-slate-600">Categoria</label><select id="filter-categoria" class="mt-1 block w-full py-2 px-3 border border-slate-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"></select></div>
+                                    <div class="xl:col-span-1"><label for="filter-cartao" class="block text-sm font-medium text-slate-600">Cartão</label><select id="filter-cartao" class="mt-1 block w-full py-2 px-3 border border-slate-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"></select></div>
+                                    <div class="xl:col-span-1"><label for="filter-natureza" class="block text-sm font-medium text-slate-600">Natureza</label><select id="filter-natureza" class="mt-1 block w-full py-2 px-3 border border-slate-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"><option value="all">Todas</option><option value="fixas">Apenas Fixas</option><option value="parceladas">Apenas Parceladas</option><option value="avulsas">Apenas Avulsas</option></select></div>
+                                    <div class="xl:col-span-1"><label for="filter-start-month" class="block text-sm font-medium text-slate-600">Início</label><select id="filter-start-month" class="mt-1 block w-full py-2 px-3 border border-slate-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"></select></div>
+                                    <div class="xl:col-span-1"><label for="filter-end-month" class="block text-sm font-medium text-slate-600">Fim</label><select id="filter-end-month" class="mt-1 block w-full py-2 px-3 border border-slate-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"></select></div>
+                                    <button id="clear-filters-btn" class="bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-md hover:bg-slate-300 transition-colors flex items-center justify-center gap-2 h-10"><i class="fa-solid fa-eraser"></i> Limpar</button>
+                                </div>
+                            </div>
+                            
+                            <div id="cards-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:items-start mb-8"></div>
 
-                applyFiltersAndRender();
+                            <div id="main-projection-container">
+                                <div class="bg-white p-6 rounded-xl shadow-md">
+                                    <div class="flex justify-between items-center mb-4">
+                                        <h2 id="projection-chart-title" class="text-xl font-semibold text-slate-800">Projeção de Despesas Mensais</h2>
+                                        <div id="main-projection-view-toggle" class="hidden"><div class="inline-flex rounded-md shadow-sm" role="group"><button type="button" id="view-resumido-btn" class="control-btn control-btn-active rounded-l-lg px-4 py-2 text-sm font-medium">Resumido</button><button type="button" id="view-detalhado-btn" class="control-btn rounded-r-md px-4 py-2 text-sm font-medium bg-white border border-gray-200 hover:bg-gray-100">Detalhado</button></div></div>
+                                    </div>
+                                    <div id="main-projection-chart-wrapper" class="h-80 md:h-96"><canvas id="projectionChart"></canvas></div>
+                                    <div id="main-projection-table-wrapper" class="hidden h-80 md:h-96">
+                                        <div class="main-projection-table-container"><table class="w-full text-sm text-left text-slate-500"><thead class="text-xs text-slate-700 uppercase bg-slate-100 sticky top-0"><tr><th scope="col" class="px-6 py-3">Descrição</th><th scope="col" class="px-6 py-3">Data</th><th scope="col" class="px-6 py-3">Cartão</th><th scope="col" class="px-6 py-3 text-right">Valor</th></tr></thead><tbody id="main-projection-table-body"></tbody></table></div>
+                                        <table class="w-full text-sm"><tfoot id="main-projection-table-footer" class="bg-slate-100 font-semibold"></tfoot></table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
-                loadingState.style.display = 'none';
-                contentContainer.classList.remove('hidden');
+                        <div id="detailed-analysis-view" class="hidden">
+                            <div class="bg-white p-6 rounded-xl shadow-md">
+                                <h2 class="text-2xl font-bold text-slate-800 mb-4">Análise Detalhada de Contas</h2>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 items-end mb-6 border-b pb-6">
+                                    <div><label for="detailed-filter-natureza" class="block text-sm font-medium text-slate-600">Analisar</label><select id="detailed-filter-natureza" class="mt-1 block w-full py-2 px-3 border border-slate-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"><option value="all">Resumo Total</option><option value="fixas">Contas Fixas</option><option value="parceladas">Contas Parceladas</option><option value="avulsas">Contas Avulsas</option></select></div>
+                                    <div><label for="detailed-filter-tipo" class="block text-sm font-medium text-slate-600">Tipo</label><select id="detailed-filter-tipo" class="mt-1 block w-full py-2 px-3 border border-slate-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"></select></div>
+                                    <div><label for="detailed-filter-cartao" class="block text-sm font-medium text-slate-600">Cartão</label><select id="detailed-filter-cartao" class="mt-1 block w-full py-2 px-3 border border-slate-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"></select></div>
+                                    <div><label for="detailed-start-month" class="block text-sm font-medium text-slate-600">Início</label><select id="detailed-start-month" class="mt-1 block w-full py-2 px-3 border border-slate-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"></select></div>
+                                    <div><label for="detailed-end-month" class="block text-sm font-medium text-slate-600">Fim</label><select id="detailed-end-month" class="mt-1 block w-full py-2 px-3 border border-slate-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"></select></div>
+                                </div>
+                                <div id="detailed-analysis-controls" class="flex flex-wrap items-center justify-between gap-4 mb-6"></div>
+                                
+                                <div id="detailed-analysis-wrapper">
+                                    <div id="detailed-analysis-summary"></div>
+                                    <div id="detailed-analysis-chart-table" class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                                        <div class="h-80 md:h-96 lg:col-span-2"><canvas id="detailedAnalysisChart"></canvas></div>
+                                        <div class="detailed-analysis-table-wrapper h-80 md:h-96 lg:col-span-3">
+                                            <div class="detailed-analysis-table-container"><table class="w-full text-sm text-left text-slate-500"><thead id="detailed-analysis-table-head" class="text-xs text-slate-700 uppercase bg-slate-100 sticky top-0"></thead><tbody id="detailed-analysis-table-body"></tbody></table></div>
+                                            <table class="w-full text-sm"><tfoot id="detailed-analysis-table-footer" class="bg-slate-100 font-semibold"></tfoot></table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+    
+    <script type="module">
+        import { initFirebase } from './firebase-config.js';
+        import { getAuth, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-auth.js";
+        import { getFirestore, collection, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore.js";
+    
+        // ... (resto do seu JS, com as funções de renderização atualizadas abaixo)
+        let auth, db; let allTransactions = []; let tipos = []; let cartoes = [];
+        const loadingState = document.getElementById("loading-state");
+        const contentContainer = document.getElementById("content-container");
+        const cardsContainer = document.getElementById("cards-container");
+        const filterTipo = document.getElementById("filter-tipo");
+        const filterCategoria = document.getElementById("filter-categoria");
+        const filterCartao = document.getElementById("filter-cartao");
+        const filterNatureza = document.getElementById("filter-natureza");
+        const filterStartMonth = document.getElementById("filter-start-month");
+        const filterEndMonth = document.getElementById("filter-end-month");
+        const clearFiltersBtn = document.getElementById("clear-filters-btn");
+        const detailedFilterNatureza = document.getElementById('detailed-filter-natureza');
+        const detailedFilterTipo = document.getElementById('detailed-filter-tipo');
+        const detailedFilterCartao = document.getElementById('detailed-filter-cartao');
+        const detailedStartMonthEl = document.getElementById('detailed-start-month');
+        const detailedEndMonthEl = document.getElementById('detailed-end-month');
+        const detailedAnalysisControls = document.getElementById('detailed-analysis-controls');
+        const exportCsvBtn = document.getElementById("exportCsvBtn");
+        const exportPdfBtn = document.getElementById("exportPdfBtn");
+        const logoutBtn = document.getElementById("logoutBtn");
+        let projectionChart = null; let detailedAnalysisChart = null;
+        let detailedSortState = { key: 'valor', order: 'desc' };
+        let detailedGroupKey = 'none'; let mainProjectionView = 'resumido';
+        const showProjectionBtn = document.getElementById('show-projection-btn');
+        const showAnalysisBtn = document.getElementById('show-analysis-btn');
+        const projectionView = document.getElementById('projection-view');
+        const detailedAnalysisView = document.getElementById('detailed-analysis-view');
 
-            } catch (error) {
-                console.error("Erro ao carregar dados:", error);
-                loadingState.innerHTML = `<p class="text-red-500">Erro ao carregar os dados. Tente novamente mais tarde.</p>`;
-            }
+        // Lógica das Abas
+        showProjectionBtn.addEventListener('click', () => {
+            projectionView.classList.remove('hidden');
+            detailedAnalysisView.classList.add('hidden');
+            showProjectionBtn.classList.replace('tab-inactive', 'tab-active');
+            showAnalysisBtn.classList.replace('tab-active', 'tab-inactive');
+        });
+        showAnalysisBtn.addEventListener('click', () => {
+            projectionView.classList.add('hidden');
+            detailedAnalysisView.classList.remove('hidden');
+            showAnalysisBtn.classList.replace('tab-inactive', 'tab-active');
+            showProjectionBtn.classList.replace('tab-active', 'tab-inactive');
         });
 
-        function renderProjections(transactions, cartoes) {
-            cardsContainer.innerHTML = ''; // Limpa os cards antigos
-            const now = new Date();
-            now.setHours(0, 0, 0, 0);
+        // Lógica da Sidebar
+        const sidebar = document.getElementById('sidebar');
+        const mainContent = document.getElementById('main-content');
+        const collapseBtn = document.getElementById('collapse-sidebar-btn');
+        const openMobileBtn = document.getElementById('open-sidebar-mobile-btn');
+        const closeMobileBtn = document.getElementById('close-sidebar-mobile-btn');
+        
+        collapseBtn.addEventListener('click', () => {
+            sidebar.classList.toggle('collapsed');
+            sidebar.classList.toggle('w-64');
+            sidebar.classList.toggle('w-20');
+            mainContent.classList.toggle('md:pl-64');
+            mainContent.classList.toggle('md:pl-20');
+        });
+        openMobileBtn.addEventListener('click', () => sidebar.classList.remove('-translate-x-full'));
+        closeMobileBtn.addEventListener('click', () => sidebar.classList.add('-translate-x-full'));
 
+        async function main() {
+            try {
+                const savedEnv = localStorage.getItem('firebaseEnv') || 'prd';
+                const services = initFirebase(savedEnv); auth = services.auth; db = services.db;
+                await setPersistence(auth, browserLocalPersistence);
+                
+                onAuthStateChanged(auth, async (user) => {
+                    if (!user) {
+                        window.location.href = "index.html";
+                        return;
+                    }
+                    
+                    if (user.email) {
+                        document.getElementById('user-name-display-sidebar').textContent = user.email;
+                    }
+
+                    logoutBtn.addEventListener('click', () => { signOut(auth).then(() => { window.location.href = "index.html"; }); });
+                    exportCsvBtn.addEventListener('click', () => exportToCSV(allTransactions, tipos, cartoes));
+                    exportPdfBtn.addEventListener('click', exportToPDF);
+                    
+                    try {
+                        const settingsDocRef = doc(db, 'users', user.uid, 'data', 'settings');
+                        const settingsDoc = await getDoc(settingsDocRef);
+                        const settings = settingsDoc.exists() ? settingsDoc.data() : {};
+                        tipos = settings.tipos || []; cartoes = settings.cartoes || [];
+                        const transactionsRef = collection(db, 'users', user.uid, 'transactions');
+                        const snapshot = await getDocs(transactionsRef);
+                        allTransactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        
+                        populateSelect(filterTipo, tipos.filter(t => ['Despesa', 'Investimento'].includes(t.main)), 'Todos os Tipos');
+                        populateSelect(filterCartao, cartoes, 'Todos os Cartões');
+                        populateCategoryFilter(filterCategoria, allTransactions);
+                        populateSelect(detailedFilterTipo, tipos.filter(t => ['Despesa', 'Investimento'].includes(t.main)), 'Todos os Tipos');
+                        populateSelect(detailedFilterCartao, cartoes, 'Todos os Cartões');
+                        populateMonthFilter(filterStartMonth, 24, true);
+                        populateMonthFilter(filterEndMonth, 24, true);
+                        populateMonthFilter(detailedStartMonthEl, 24, true);
+                        populateMonthFilter(detailedEndMonthEl, 24, true);
+                        
+                        filterStartMonth.selectedIndex = 12; filterEndMonth.selectedIndex = 17;
+                        detailedFilterNatureza.value = 'all'; detailedStartMonthEl.selectedIndex = 12; detailedEndMonthEl.selectedIndex = 15;
+                        
+                        updateMainProjection();
+                        updateDetailedAnalysis();
+                        
+                        [filterTipo, filterCategoria, filterCartao, filterNatureza, filterStartMonth, filterEndMonth].forEach(el => el.addEventListener('change', updateMainProjection));
+                        const detailedControlsList = [detailedFilterNatureza, detailedFilterTipo, detailedFilterCartao, detailedStartMonthEl, detailedEndMonthEl];
+                        detailedControlsList.forEach(el => el.addEventListener('change', updateDetailedAnalysis));
+                        
+                        detailedAnalysisControls.addEventListener('click', (e) => {
+                            const sortBtn = e.target.closest('.sort-btn'); const groupBtn = e.target.closest('.group-btn');
+                            if (sortBtn) {
+                                const key = sortBtn.dataset.sort;
+                                if (detailedSortState.key === key) { detailedSortState.order = detailedSortState.order === 'asc' ? 'desc' : 'asc'; } else { detailedSortState.key = key; detailedSortState.order = 'desc'; }
+                                updateDetailedAnalysis();
+                            }
+                            if (groupBtn) { const key = groupBtn.dataset.group; detailedGroupKey = detailedGroupKey === key ? 'none' : key; updateDetailedAnalysis(); }
+                        });
+                        document.getElementById('detailed-analysis-summary').addEventListener('click', (e) => {
+                            const detailsBtn = e.target.closest('.toggle-category-details');
+                            if (detailsBtn) {
+                                const detailsEl = detailsBtn.closest('.category-card').querySelector('.category-card-details');
+                                detailsEl.classList.toggle('hidden');
+                                detailsBtn.querySelector('i').classList.toggle('fa-chevron-down'); detailsBtn.querySelector('i').classList.toggle('fa-chevron-up');
+                            }
+                        });
+                        document.getElementById('view-resumido-btn').addEventListener('click', () => { mainProjectionView = 'resumido'; updateMainProjection(); });
+                        document.getElementById('view-detalhado-btn').addEventListener('click', () => { mainProjectionView = 'detalhado'; updateMainProjection(); });
+                        clearFiltersBtn.addEventListener('click', () => {
+                            filterTipo.value = 'all'; filterCategoria.value = 'all'; filterCartao.value = 'all'; filterNatureza.value = 'all';
+                            filterStartMonth.selectedIndex = 12; filterEndMonth.selectedIndex = 17; updateMainProjection();
+                        });
+                        
+                        loadingState.style.display = 'none';
+                        contentContainer.classList.remove('hidden');
+                    } catch (error) { console.error("Erro ao carregar dados:", error); loadingState.innerHTML = `<p class="text-red-500">Erro ao carregar os dados. Tente novamente mais tarde.</p>`; }
+                });
+            } catch (error) { console.error("Falha ao inicializar o ambiente do Firebase na página de projeção:", error); loadingState.innerHTML = `<p class="text-red-500">Erro crítico ao conectar. Tente voltar e fazer login novamente.</p>`; }
+        }
+        
+        // FUNÇÃO DE RENDERIZAR CARDS RESTAURADA E ADAPTADA
+        function renderProjections(transactions) {
+            cardsContainer.innerHTML = ''; const now = new Date(); now.setHours(0, 0, 0, 0);
             const periods = [
-                { months: 3, title: "Até 3 meses", color: "border-red-500", icon: "fa-calendar-days" },
-                { months: 6, title: "Até 6 meses", color: "border-orange-500", icon: "fa-calendar-week" },
-                { months: 12, title: "Até 12 meses", color: "border-green-500", icon: "fa-calendar-alt" }
+                { months: 3, title: "Próximos 3 meses", color: "border-rose-500", icon: "fa-calendar-days" },
+                { months: 6, title: "Próximos 6 meses", color: "border-amber-500", icon: "fa-calendar-week" },
+                { months: 12, title: "Próximos 12 meses", color: "border-emerald-500", icon: "fa-calendar-alt" }
             ];
-
             let cumulativeTotal = 0;
-
             periods.forEach((period, index) => {
-                const periodStart = new Date(now);
-                if (index > 0) {
-                    periodStart.setMonth(now.getMonth() + periods[index-1].months);
-                }
-                const periodEnd = new Date(now);
-                periodEnd.setMonth(now.getMonth() + period.months);
-
+                const periodStart = new Date(now); if (index > 0) { periodStart.setMonth(now.getMonth() + periods[index-1].months); } const periodEnd = new Date(now); periodEnd.setMonth(now.getMonth() + period.months);
                 const periodTransactions = transactions.filter(t => {
-                    if (t.recurring === true) return false;
                     const tDate = new Date(t.data + "T00:00:00");
                     return tDate > (index === 0 ? now : periodStart) && tDate <= periodEnd;
                 });
-                
-                const periodSum = periodTransactions.reduce((acc, t) => acc + (parseFloat(t.valor) || 0), 0);
-                const totalForCard = cumulativeTotal + periodSum;
-
+                const periodSum = periodTransactions.reduce((acc, t) => acc + (parseFloat(t.valor) || 0), 0); const totalForCard = cumulativeTotal + periodSum;
                 const cardHTML = `
-                <div class="card bg-white p-6 rounded-xl shadow-md ${period.color} border-l-4 flex flex-col">
-                    <div class="flex justify-between items-center mb-1">
-                        <h2 class="text-lg font-semibold text-slate-700"><i class="fa-solid ${period.icon} mr-2 text-slate-400"></i>${period.title}</h2>
+                <div class="card bg-white p-6 rounded-xl shadow-md border-l-4 ${period.color} flex flex-col">
+                    <div class="flex justify-between items-start mb-2">
+                        <div>
+                            <h2 class="text-lg font-semibold text-slate-800">${period.title}</h2>
+                            <p class="text-sm text-slate-500">Total acumulado para o período</p>
+                        </div>
+                        <div class="w-10 h-10 flex items-center justify-center bg-slate-100 rounded-lg text-slate-500">
+                            <i class="fa-solid ${period.icon} fa-lg"></i>
+                        </div>
                     </div>
-                    <p class="text-sm text-slate-500 mb-4">Total acumulado para o período</p>
                     <p class="text-4xl font-extrabold text-slate-800 mt-auto">${formatCurrency(totalForCard)}</p>
-                    <div id="list-${period.months}meses" class="mt-4 text-sm text-slate-600 space-y-2 border-t pt-2"></div>
+                    <div id="list-${period.months}meses" class="mt-4 text-sm text-slate-600 space-y-2 border-t pt-3"></div>
                 </div>`;
                 cardsContainer.innerHTML += cardHTML;
-                
                 renderProjectionList(`list-${period.months}meses`, periodTransactions, cumulativeTotal > 0 ? createSummaryHtml(cumulativeTotal) : '');
-                
                 cumulativeTotal += periodSum;
             });
         }
         
-        function createSummaryHtml(value) {
-            return `<div class="text-xs text-slate-500 mt-2 p-2 bg-slate-50 rounded-md">
-                        Valor acumulado do(s) período(s) anterior(es): <strong>${formatCurrency(value)}</strong>.
-                    </div>`;
-        }
-
-        function renderProjectionList(containerId, list, summaryHtml = '') {
-            const container = document.getElementById(containerId);
-            const sortedList = [...list].sort((a, b) => new Date(a.data) - new Date(b.data));
-
-            if (sortedList.length === 0) {
-                container.innerHTML = `${summaryHtml}<p class="text-slate-400 text-center mt-2">Nenhuma conta a terminar neste período.</p>`;
-                return;
-            }
-
-            const listHtml = sortedList.map(t => {
-                return `<li class="flex justify-between items-center border-b border-slate-100 py-2 last:border-0">
-                            <div>
-                                <span class="block truncate font-medium text-slate-700">${t.descricao}</span>
-                                <em class="text-xs text-slate-400">${t.categoria || 'N/A'}</em>
-                            </div>
-                            <div class="text-right flex-shrink-0 ml-2">
-                                <span class="font-semibold text-sm whitespace-nowrap">${formatCurrency(t.valor)}</span>
-                                <span class="block text-xs text-slate-500">${new Date(t.data + "T00:00:00").toLocaleDateString('pt-BR')}</span>
-                            </div>
-                        </li>`;
-            }).join('');
-
-            container.innerHTML = `
-                ${summaryHtml}
-                <div class="projection-list mt-2">
-                    <ul>${listHtml}</ul>
-                </div>
-                ${list.length > 6 ? '<button class="toggle-list-btn text-indigo-500 text-sm mt-2 hover:underline w-full text-center">Ver mais</button>' : ''}
-            `;
-            
-            const toggleBtn = container.querySelector('.toggle-list-btn');
-            if(toggleBtn) {
-                toggleBtn.onclick = () => {
-                    const listContainer = container.querySelector('.projection-list');
-                    listContainer.classList.toggle('expanded');
-                    toggleBtn.textContent = listContainer.classList.contains('expanded') ? 'Ver menos' : 'Ver mais';
-                };
-            }
-        }
-
-        function renderProjectionChart(transactions, tipos, cartoes, selectedCard, selectedTipoId, selectedMonth) {
-            const ctx = document.getElementById('projectionChart').getContext('2d');
-            const chartTitleEl = document.getElementById('projection-chart-title');
-            
-            const backgroundColors = [
-                'rgba(99, 102, 241, 0.7)', 'rgba(239, 68, 68, 0.7)', 'rgba(16, 185, 129, 0.7)', 
-                'rgba(245, 158, 11, 0.7)', 'rgba(139, 92, 246, 0.7)', 'rgba(236, 72, 153, 0.7)',
-                'rgba(22, 163, 74, 0.7)', 'rgba(217, 119, 6, 0.7)', 'rgba(107, 114, 128, 0.7)'
-            ];
-
-            if (projectionChart) {
-                projectionChart.destroy();
-            }
-
-            // Se um mês específico for selecionado, mostra gráfico de BARRAS por categoria
-            if (selectedMonth !== 'all') {
-                const monthDate = new Date(selectedMonth + '-02');
-                const monthName = monthDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
-                chartTitleEl.textContent = `Gastos por Categoria - ${monthName.charAt(0).toUpperCase() + monthName.slice(1)}`;
-
-                const categoryTotals = transactions.reduce((acc, t) => {
-                    const category = t.categoria || 'Sem Categoria';
-                    acc[category] = (acc[category] || 0) + (parseFloat(t.valor) || 0);
+        // FUNÇÃO DE RENDERIZAR RESUMO FINANCEIRO (NOVA VERSÃO)
+        function renderDetailedAnalysis(transactions, natureza) {
+            const chartTableWrapper = document.getElementById('detailed-analysis-chart-table');
+            const summaryWrapper = document.getElementById('detailed-analysis-summary');
+            detailedAnalysisControls.innerHTML = '';
+        
+            const startMonthStr = detailedStartMonthEl.value;
+            const endMonthStr = detailedEndMonthEl.value;
+            const startDate = new Date(startMonthStr + '-02T00:00:00');
+            const endDate = new Date(endMonthStr + '-02T00:00:00');
+            endDate.setMonth(endDate.getMonth() + 1);
+            endDate.setDate(0);
+        
+            const allPeriodTransactions = allTransactions.filter(t => {
+                const tDate = new Date(t.data + "T00:00:00");
+                return tDate >= startDate && tDate <= endDate;
+            });
+            const periodTransactions = transactions.filter(t => {
+                const tDate = new Date(t.data + "T00:00:00");
+                return tDate >= startDate && tDate <= endDate;
+            });
+        
+            if (natureza === 'all') {
+                chartTableWrapper.classList.add('hidden');
+                summaryWrapper.classList.remove('hidden');
+        
+                const income = allPeriodTransactions.filter(t => {
+                    const tipo = tipos.find(ti => ti.id === t.tipoId);
+                    return tipo && tipo.main === 'Receita';
+                }).reduce((s, t) => s + (parseFloat(t.valor) || 0), 0);
+        
+                const expenses = periodTransactions.filter(t => {
+                    const tipo = tipos.find(ti => ti.id === t.tipoId);
+                    return tipo && (tipo.main === 'Despesa' || tipo.main === 'Investimento');
+                });
+        
+                const totalExpenses = expenses.reduce((s, t) => s + (parseFloat(t.valor) || 0), 0);
+                const compromised = income > 0 ? (totalExpenses / income) * 100 : 0;
+                const endingVal = expenses.filter(t => t.installments && t.installments.current === t.installments.total).reduce((s, t) => s + (parseFloat(t.valor) || 0), 0);
+        
+                let status, colorClass, icon;
+                if (compromised <= 70) {
+                    status = 'Saudável'; colorClass = 'text-emerald-600 bg-emerald-50'; icon = 'fa-shield-heart';
+                } else if (compromised <= 90) {
+                    status = 'Atenção'; colorClass = 'text-amber-600 bg-amber-50'; icon = 'fa-triangle-exclamation';
+                } else {
+                    status = 'Crítico'; colorClass = 'text-rose-600 bg-rose-50'; icon = 'fa-shield-virus';
+                }
+        
+                const catExpenses = expenses.reduce((acc, t) => {
+                    const cat = t.categoria || 'Sem Categoria';
+                    acc[cat] = (acc[cat] || 0) + (parseFloat(t.valor) || 0);
                     return acc;
                 }, {});
-
-                const labels = Object.keys(categoryTotals);
-                const data = Object.values(categoryTotals);
-
-                projectionChart = new Chart(ctx, {
-                    type: 'bar',
-                    data: {
-                        labels: labels,
-                        datasets: [{
-                            label: 'Gastos no Mês',
-                            data: data,
-                            backgroundColor: backgroundColors,
-                            borderColor: backgroundColors.map(color => color.replace('0.7', '1')),
-                            borderWidth: 1,
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        indexAxis: 'y', // Gráfico de barras horizontal para melhor legibilidade
-                        scales: {
-                            x: { 
-                                beginAtZero: true, 
-                                ticks: { callback: (value) => formatCurrency(value) } 
-                            },
-                            y: { grid: { display: false } }
-                        },
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: {
-                                callbacks: {
-                                    label: (context) => `Total: ${formatCurrency(context.raw)}`
-                                }
-                            },
-                            datalabels: {
-                                anchor: 'end',
-                                align: 'end',
-                                formatter: (value) => formatCurrency(value),
-                                color: '#334155', // slate-700
-                                font: { weight: '600' }
-                            }
-                        }
-                    }
-                });
+        
+                const catCardsHTML = Object.entries(catExpenses).sort(([,a],[,b]) => b-a).map(([cat, total]) => {
+                    const p = income > 0 ? (total / income) * 100 : 0;
+                    return `
+                    <div class="category-card bg-white rounded-xl p-4 border border-slate-200 hover:shadow-md transition-shadow">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="font-bold text-slate-800">${cat}</p>
+                                <p class="text-2xl font-bold text-indigo-600">${formatCurrency(total)}</p>
+                            </div>
+                            <span class="text-xs font-semibold ${p > 25 ? 'text-rose-500' : 'text-slate-500'}">${p.toFixed(1)}% da receita</span>
+                        </div>
+                        <div class="mt-2">
+                            <div class="w-full bg-slate-200 rounded-full h-2 mt-1">
+                                <div class="bg-indigo-500 h-2 rounded-full" style="width: ${Math.min(p, 100)}%"></div>
+                            </div>
+                        </div>
+                    </div>`;
+                }).join('');
+        
+                summaryWrapper.innerHTML = `
+                    <div>
+                        <h3 class="text-xl font-semibold text-slate-700 mb-6 text-center">Resumo Financeiro do Período</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                            <div class="p-5 rounded-xl text-center ${colorClass}">
+                                <i class="fa-solid ${icon} fa-2x mb-2"></i>
+                                <p class="text-lg font-semibold">${status}</p>
+                                <p class="text-sm">${compromised.toFixed(1)}% da Receita Comprometida</p>
+                            </div>
+                            <div class="bg-emerald-50 text-emerald-800 p-5 rounded-xl text-center">
+                                <i class="fa-solid fa-arrow-up-wide-short fa-2x mb-2"></i>
+                                <p class="text-sm font-semibold">Receita no Período</p>
+                                <p class="text-2xl font-bold">${formatCurrency(income)}</p>
+                            </div>
+                            <div class="bg-rose-50 text-rose-800 p-5 rounded-xl text-center">
+                                <i class="fa-solid fa-arrow-down-wide-short fa-2x mb-2"></i>
+                                <p class="text-sm font-semibold">Total de Despesas</p>
+                                <p class="text-2xl font-bold">${formatCurrency(totalExpenses)}</p>
+                            </div>
+                            <div class="bg-teal-50 text-teal-800 p-5 rounded-xl text-center">
+                                <i class="fa-solid fa-sack-dollar fa-2x mb-2"></i>
+                                <p class="text-sm font-semibold">Valor Liberado</p>
+                                <p class="text-2xl font-bold">${formatCurrency(endingVal)}</p>
+                            </div>
+                        </div>
+                        <h3 class="text-xl font-semibold text-slate-700 mt-10 mb-6 text-center">Gastos por Categoria</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                            ${catCardsHTML}
+                        </div>
+                    </div>
+                `;
                 return;
             }
+            
+            // Lógica para as outras naturezas (fixas, parceladas, avulsas)
+            chartTableWrapper.classList.remove('hidden');
+            summaryWrapper.classList.add('hidden');
+            renderDetailedControls(natureza);
+            
+            // ... (resto da sua lógica para renderizar o gráfico e a tabela detalhada)
+            const tableHead = document.getElementById('detailed-analysis-table-head'); const tableBody = document.getElementById('detailed-analysis-table-body'); const tableFooter = document.getElementById('detailed-analysis-table-footer'); const ctx = document.getElementById('detailedAnalysisChart').getContext('2d');
+            tableBody.innerHTML = ''; tableFooter.innerHTML = '';
+            const labels = []; let current = new Date(startDate);
+            while(current <= endDate) { labels.push(current.toLocaleString('pt-BR', { month: 'short', year: '2-digit' }).replace(/^\w/, c => c.toUpperCase())); current.setMonth(current.getMonth() + 1); }
+            const datasets = []; const categoryData = {};
+            let relevantTransactions = periodTransactions.filter(t => { const tipo = tipos.find(ti => ti.id === t.tipoId); const isExpense = tipo && (tipo.main === 'Despesa' || tipo.main === 'Investimento'); const natureMatch = (natureza === 'fixas' && t.recurring) || (natureza === 'parceladas' && !!t.installments) || (natureza === 'avulsas' && !t.recurring && !t.installments); return isExpense && natureMatch; });
+            relevantTransactions.sort((a, b) => { const o = detailedSortState.order === 'asc' ? 1 : -1; let vA, vB; switch(detailedSortState.key) { case 'descricao': return a.descricao.localeCompare(b.descricao) * o; case 'parcelas': vA = a.installments ? a.installments.total : 0; vB = b.installments ? b.installments.total : 0; return (vA - vB) * o; default: return ((parseFloat(a.valor) || 0) - (parseFloat(b.valor) || 0)) * o; } });
+            relevantTransactions.forEach(t => {
+                const cat = t.categoria || 'Sem Categoria'; if (!categoryData[cat]) { categoryData[cat] = { label: cat, data: new Array(labels.length).fill(0), backgroundColor: `rgba(${Math.floor(Math.random()*255)}, ${Math.floor(Math.random()*255)}, ${Math.floor(Math.random()*255)}, 0.7)` }; }
+                const tDate = new Date(t.data + "T00:00:00"); const monthIdx = (tDate.getFullYear() - startDate.getFullYear()) * 12 + tDate.getMonth() - startDate.getMonth();
+                if(monthIdx >= 0 && monthIdx < labels.length) { const v = parseFloat(t.valor) || 0; categoryData[cat].data[monthIdx] += v; }
+            });
+            Object.values(categoryData).forEach(ds => datasets.push(ds));
+            if(detailedAnalysisChart) detailedAnalysisChart.destroy();
+            detailedAnalysisChart = new Chart(ctx, { type: 'bar', data: { labels, datasets }, options: { animation: false, responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, beginAtZero: true, ticks: { callback: (v) => formatCurrency(v) } } }, plugins: { legend: { display: true, position: 'top' }, tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${formatCurrency(c.raw)}` } }, datalabels: { display: false } } } });
+            renderDetailedTable(relevantTransactions, natureza);
+        }
 
-            // Lógica para gráfico de barras de projeção de 12 meses
-            const labels = [];
-            for (let i = 0; i < 12; i++) {
-                const date = new Date();
-                date.setMonth(date.getMonth() + i);
-                const label = date.toLocaleString('pt-BR', { month: 'short', year: '2-digit' });
-                labels.push(label.charAt(0).toUpperCase() + label.slice(1));
+        // FUNÇÕES HELPER (mantidas, pois a lógica não muda, apenas o estilo que elas geram)
+        function formatCurrency(value) { return (Number(value) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+        function populateSelect(selectElement, items, defaultOptionText) { selectElement.innerHTML = `<option value="all">${defaultOptionText}</option>`; items.forEach(item => { selectElement.innerHTML += `<option value="${item.id}">${item.name}</option>`; }); }
+        function populateCategoryFilter(selectElement, transactions) {
+            const categories = [...new Set(transactions.map(t => t.categoria).filter(Boolean))].sort(); selectElement.innerHTML = `<option value="all">Todas as Categorias</option>`;
+            categories.forEach(cat => { selectElement.innerHTML += `<option value="${cat}">${cat}</option>`; });
+        }
+        function populateMonthFilter(selectElement, totalMonths, includePast) {
+            selectElement.innerHTML = ''; const now = new Date(); const startOffset = includePast ? -12 : 0;
+            for (let i = startOffset; i < totalMonths + startOffset; i++) {
+                const date = new Date(now.getFullYear(), now.getMonth() + i, 1); const monthName = date.toLocaleString('pt-BR', { month: 'long' }); const year = date.getFullYear();
+                const optionValue = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                selectElement.innerHTML += `<option value="${optionValue}">${monthName.charAt(0).toUpperCase() + monthName.slice(1)} de ${year}</option>`;
             }
-            
-            let datasets = [];
-            let groupByCategory = (selectedTipoId !== 'all' && selectedCard === 'all') || (selectedCard !== 'all' && selectedTipoId === 'all');
-            
+        }
+        function createSummaryHtml(value) { return `<div class="text-xs text-slate-500 mt-2 p-2 bg-slate-100 rounded-md">Valor acumulado do(s) período(s) anterior(es): <strong>${formatCurrency(value)}</strong>.</div>`; }
+        function renderProjectionList(containerId, list, summaryHtml = '') {
+            const container = document.getElementById(containerId); const sortedList = [...list].sort((a, b) => new Date(a.data) - new Date(b.data));
+            if (sortedList.length === 0) { container.innerHTML = `${summaryHtml}<p class="text-slate-400 text-center mt-2">Nenhuma conta a terminar neste período.</p>`; return; }
+            const listHtml = sortedList.map(t => { let d = t.descricao; if(t.installments) { d += ` <span class="text-xs font-mono text-amber-600">(${t.installments.current}/${t.installments.total})</span>`; } return `<li class="flex justify-between items-center border-b border-slate-100 py-2.5 last:border-0"><div><span class="block truncate font-medium text-slate-700">${d}</span><em class="text-xs text-slate-400">${t.categoria || 'N/A'}</em></div><div class="text-right flex-shrink-0 ml-2"><span class="font-semibold text-sm whitespace-nowrap">${formatCurrency(t.valor)}</span><span class="block text-xs text-slate-500">${new Date(t.data + "T00:00:00").toLocaleDateString('pt-BR')}</span></div></li>`; }).join('');
+            container.innerHTML = `${summaryHtml}<div class="projection-list mt-2"><ul>${listHtml}</ul></div>${list.length > 6 ? '<button class="toggle-list-btn text-indigo-600 text-sm mt-2 hover:underline w-full text-center font-semibold">Ver mais</button>' : ''}`;
+            const toggleBtn = container.querySelector('.toggle-list-btn'); if(toggleBtn) { toggleBtn.onclick = () => { const l = container.querySelector('.projection-list'); l.classList.toggle('expanded'); toggleBtn.textContent = l.classList.contains('expanded') ? 'Ver menos' : 'Ver mais'; }; }
+        }
+
+        // As demais funções JS (updateMainProjection, renderProjectionChart, etc.) podem ser mantidas como estão,
+        // pois a lógica de dados não foi alterada, apenas a forma como as funções de renderização
+        // (renderProjections e renderDetailedAnalysis) geram o HTML.
+        // Incluí abaixo o resto do seu JS para garantir que o arquivo seja completo.
+
+        function updateMainProjection() {
+            const selectedTipoId = filterTipo.value; const selectedCategoria = filterCategoria.value; const selectedCard = filterCartao.value; const selectedNatureza = filterNatureza.value;
+            const selectedStartMonth = filterStartMonth.value; let selectedEndMonth = filterEndMonth.value;
+            if (selectedEndMonth < selectedStartMonth) { selectedEndMonth = selectedStartMonth; filterEndMonth.value = selectedStartMonth; }
+            const filteredTransactions = allTransactions.filter(t => {
+                const tipo = tipos.find(tipo => tipo.id === t.tipoId); const mainType = tipo ? tipo.main : ''; if (!['Despesa', 'Investimento'].includes(mainType)) return false;
+                const tipoMatch = selectedTipoId === 'all' || t.tipoId.toString() === selectedTipoId;
+                const categoriaMatch = selectedCategoria === 'all' || t.categoria === selectedCategoria;
+                const cartaoMatch = selectedCard === 'all' || (t.cartaoId && t.cartaoId.toString() === selectedCard);
+                const naturezaMatch = (() => { switch (selectedNatureza) { case 'fixas': return t.recurring === true; case 'parceladas': return !!t.installments; case 'avulsas': return !t.recurring && !t.installments; default: return true; } })();
+                return tipoMatch && categoriaMatch && cartaoMatch && naturezaMatch;
+            });
+            const startDate = new Date(selectedStartMonth + '-02T00:00:00'); const endDate = new Date(selectedEndMonth + '-02T00:00:00');
+            endDate.setMonth(endDate.getMonth() + 1); endDate.setDate(0);
+            const chartFilteredTransactions = filteredTransactions.filter(t => { const tDate = new Date(t.data + "T00:00:00"); return tDate >= startDate && tDate <= endDate; });
+            renderProjections(filteredTransactions);
+            renderProjectionChart(chartFilteredTransactions, selectedCard, selectedTipoId, selectedStartMonth, selectedEndMonth);
+            renderMainProjectionTable(chartFilteredTransactions);
+            const viewToggle = document.getElementById('main-projection-view-toggle'); const chartWrapper = document.getElementById('main-projection-chart-wrapper'); const tableWrapper = document.getElementById('main-projection-table-wrapper');
+            const resumidoBtn = document.getElementById('view-resumido-btn'); const detalhadoBtn = document.getElementById('view-detalhado-btn');
+            if (selectedCategoria !== 'all' || selectedTipoId !== 'all') { viewToggle.classList.remove('hidden'); } else { viewToggle.classList.add('hidden'); mainProjectionView = 'resumido'; }
+            if (mainProjectionView === 'resumido') { chartWrapper.classList.remove('hidden'); tableWrapper.classList.add('hidden'); resumidoBtn.classList.add('control-btn-active'); detalhadoBtn.classList.remove('control-btn-active'); } 
+            else { chartWrapper.classList.add('hidden'); tableWrapper.classList.remove('hidden'); detalhadoBtn.classList.add('control-btn-active'); resumidoBtn.classList.remove('control-btn-active'); }
+        }
+        function updateDetailedAnalysis() {
+            const selectedNatureza = detailedFilterNatureza.value; const selectedTipoId = detailedFilterTipo.value; const selectedCard = detailedFilterCartao.value;
+            const filteredTransactions = allTransactions.filter(t => { const tipoMatch = selectedTipoId === 'all' || t.tipoId.toString() === selectedTipoId; const cartaoMatch = selectedCard === 'all' || (t.cartaoId && t.cartaoId.toString() === selectedCard); return tipoMatch && cartaoMatch; });
+            renderDetailedAnalysis(filteredTransactions, selectedNatureza);
+        }
+        function renderProjectionChart(transactions, selectedCard, selectedTipoId, startMonthStr, endMonthStr) {
+            const ctx = document.getElementById('projectionChart').getContext('2d'); const chartTitleEl = document.getElementById('projection-chart-title');
+            const bgColors = [ 'rgba(79, 70, 229, 0.7)', 'rgba(220, 38, 38, 0.7)', 'rgba(5, 150, 105, 0.7)', 'rgba(217, 119, 6, 0.7)', 'rgba(124, 58, 237, 0.7)', 'rgba(219, 39, 119, 0.7)', 'rgba(22, 163, 74, 0.7)', 'rgba(217, 119, 6, 0.7)', 'rgba(107, 114, 128, 0.7)' ];
+            if (projectionChart) { projectionChart.destroy(); }
+            if (startMonthStr === endMonthStr) {
+                const monthDate = new Date(startMonthStr + '-02T00:00:00'); const monthName = monthDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+                chartTitleEl.textContent = `Gastos por Categoria - ${monthName.charAt(0).toUpperCase() + monthName.slice(1)}`;
+                const categoryTotals = transactions.reduce((acc, t) => { const c = t.categoria || 'Sem Categoria'; acc[c] = (acc[c] || 0) + (parseFloat(t.valor) || 0); return acc; }, {});
+                const labels = Object.keys(categoryTotals); const data = Object.values(categoryTotals);
+                projectionChart = new Chart(ctx, { type: 'bar', data: { labels: labels, datasets: [{ label: 'Gastos no Mês', data: data, backgroundColor: bgColors, borderColor: bgColors.map(c => c.replace('0.7', '1')), borderWidth: 1, }] }, options: { animation: false, responsive: true, maintainAspectRatio: false, indexAxis: 'y', scales: { x: { beginAtZero: true, ticks: { callback: (v) => formatCurrency(v) } }, y: { grid: { display: false } } }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => `Total: ${formatCurrency(c.raw)}` } }, datalabels: { anchor: 'end', align: 'end', formatter: (v) => formatCurrency(v), color: '#334155', font: { weight: '600' } } } } });
+                return;
+            }
+            const startDate = new Date(startMonthStr + '-02T00:00:00'); const endDate = new Date(endMonthStr + '-02T00:00:00');
+            const labels = []; let currentMonth = new Date(startDate);
+            while (currentMonth <= endDate) { const l = currentMonth.toLocaleString('pt-BR', { month: 'short', year: '2-digit' }); labels.push(l.charAt(0).toUpperCase() + l.slice(1)); currentMonth.setMonth(currentMonth.getMonth() + 1); }
+            const numMonths = labels.length; let datasets = []; chartTitleEl.textContent = 'Projeção de Despesas Mensais';
+            const groupByCategory = (selectedTipoId !== 'all' && selectedCard === 'all') || (selectedCard !== 'all' && selectedTipoId === 'all');
             if (groupByCategory) {
-                const tipoSelecionado = tipos.find(t => t.id.toString() === selectedTipoId);
-                const cartaoSelecionado = cartoes.find(c => c.id.toString() === selectedCard);
-                chartTitleEl.textContent = `Gastos por Categoria: ${tipoSelecionado?.name || cartaoSelecionado?.name || ''}`;
-
-                const relevantCategories = [...new Set(transactions.map(t => t.categoria || 'Sem Categoria'))];
-                relevantCategories.forEach((category, index) => {
-                    datasets.push({
-                        label: category,
-                        data: new Array(12).fill(0),
-                        backgroundColor: backgroundColors[index % backgroundColors.length],
-                    });
-                });
-
+                const tipoSel = tipos.find(t => t.id.toString() === selectedTipoId); const cartaoSel = cartoes.find(c => c.id.toString() === selectedCard); chartTitleEl.textContent = `Gastos por Categoria: ${tipoSel?.name || cartaoSel?.name || ''}`;
+                const relCats = [...new Set(transactions.map(t => t.categoria || 'Sem Categoria'))];
+                relCats.forEach((cat, i) => { datasets.push({ label: cat, data: new Array(numMonths).fill(0), backgroundColor: bgColors[i % bgColors.length], }); });
                 transactions.forEach(t => {
-                    const tDate = new Date(t.data + "T00:00:00");
-                    const now = new Date();
-                    const monthIndex = (tDate.getFullYear() - now.getFullYear()) * 12 + tDate.getMonth() - now.getMonth();
-                    if (monthIndex >= 0 && monthIndex < 12) {
-                        const categoryIndex = relevantCategories.indexOf(t.categoria || 'Sem Categoria');
-                        if (categoryIndex !== -1) {
-                            datasets[categoryIndex].data[monthIndex] += parseFloat(t.valor) || 0;
-                        }
-                    }
+                    const tDate = new Date(t.data + "T00:00:00"); const monthIdx = (tDate.getFullYear() - startDate.getFullYear()) * 12 + tDate.getMonth() - startDate.getMonth();
+                    if (monthIdx >= 0 && monthIdx < numMonths) { const catIdx = relCats.indexOf(t.categoria || 'Sem Categoria'); if (catIdx !== -1) { datasets[catIdx].data[monthIdx] += parseFloat(t.valor) || 0; } }
                 });
-            } else { 
-                chartTitleEl.textContent = 'Projeção de Despesas Mensais';
+            } else {
                 if (selectedCard === 'all') {
-                    cartoes.forEach((card, index) => {
-                        datasets.push({
-                            label: card.name,
-                            data: new Array(12).fill(0),
-                            backgroundColor: backgroundColors[index % backgroundColors.length],
-                        });
-                    });
-                    datasets.push({
-                        label: 'Outros',
-                        data: new Array(12).fill(0),
-                        backgroundColor: backgroundColors[cartoes.length % backgroundColors.length],
-                    });
-
+                    cartoes.forEach((c, i) => { datasets.push({ label: c.name, data: new Array(numMonths).fill(0), backgroundColor: bgColors[i % bgColors.length], }); });
+                    datasets.push({ label: 'Outros', data: new Array(numMonths).fill(0), backgroundColor: bgColors[cartoes.length % bgColors.length], });
                     transactions.forEach(t => {
-                        const tDate = new Date(t.data + "T00:00:00");
-                        const now = new Date();
-                        const monthIndex = (tDate.getFullYear() - now.getFullYear()) * 12 + tDate.getMonth() - now.getMonth();
-                        if (monthIndex >= 0 && monthIndex < 12) {
-                            const cardIndex = cartoes.findIndex(c => c.id === t.cartaoId);
-                            const datasetIndex = (cardIndex !== -1) ? cardIndex : datasets.length - 1;
-                            datasets[datasetIndex].data[monthIndex] += parseFloat(t.valor) || 0;
-                        }
+                        const tDate = new Date(t.data + "T00:00:00"); const monthIdx = (tDate.getFullYear() - startDate.getFullYear()) * 12 + tDate.getMonth() - startDate.getMonth();
+                        if (monthIdx >= 0 && monthIdx < numMonths) { const cIdx = cartoes.findIndex(c => c.id === t.cartaoId); const dsIdx = (cIdx !== -1) ? cIdx : datasets.length - 1; datasets[dsIdx].data[monthIdx] += parseFloat(t.valor) || 0; }
                     });
                 } else {
-                    const data = new Array(12).fill(0);
-                    transactions.forEach(t => {
-                        const tDate = new Date(t.data + "T00:00:00");
-                        const now = new Date();
-                        const monthIndex = (tDate.getFullYear() - now.getFullYear()) * 12 + tDate.getMonth() - now.getMonth();
-                        if (monthIndex >= 0 && monthIndex < 12) {
-                            data[monthIndex] += parseFloat(t.valor) || 0;
-                        }
-                    });
-                    datasets.push({
-                        label: 'Total de Despesas',
-                        data: data,
-                        backgroundColor: 'rgba(99, 102, 241, 0.7)',
-                    });
+                    const data = new Array(numMonths).fill(0);
+                    transactions.forEach(t => { const tDate = new Date(t.data + "T00:00:00"); const monthIdx = (tDate.getFullYear() - startDate.getFullYear()) * 12 + tDate.getMonth() - startDate.getMonth(); if (monthIdx >= 0 && monthIdx < numMonths) { data[monthIdx] += parseFloat(t.valor) || 0; } });
+                    datasets.push({ label: 'Total de Despesas', data: data, backgroundColor: 'rgba(79, 70, 229, 0.7)', });
                 }
             }
+            projectionChart = new Chart(ctx, { type: 'bar', data: { labels, datasets }, options: { animation: false, responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, beginAtZero: true, ticks: { callback: (v) => formatCurrency(v) } } }, plugins: { legend: { display: datasets.length > 1, position: 'bottom' }, tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${formatCurrency(c.raw)}` } }, datalabels: { display: false } } } });
+        }
+        function renderMainProjectionTable(transactions) {
+            const tableBody = document.getElementById('main-projection-table-body'); const tableFooter = document.getElementById('main-projection-table-footer'); tableBody.innerHTML = ''; tableFooter.innerHTML = '';
+            if (transactions.length === 0) { tableBody.innerHTML = '<tr><td colspan="4" class="text-center py-10 text-slate-500">Nenhuma transação encontrada.</td></tr>'; return; }
+            transactions.sort((a,b) => new Date(a.data) - new Date(b.data)).forEach(t => { const row = document.createElement('tr'); row.className = 'border-b border-slate-100 hover:bg-slate-50'; const cardName = cartoes.find(c => c.id === t.cartaoId)?.name || 'N/A'; row.innerHTML = `<td class="px-6 py-4 font-medium text-slate-900">${t.descricao}</td><td class="px-6 py-4">${new Date(t.data + 'T00:00:00').toLocaleDateString('pt-BR')}</td><td class="px-6 py-4">${cardName}</td><td class="px-6 py-4 text-right">${formatCurrency(t.valor)}</td>`; tableBody.appendChild(row); });
+            const total = transactions.reduce((s, t) => s + (parseFloat(t.valor) || 0), 0); tableFooter.innerHTML = `<tr><td colspan="3" class="px-6 py-3 text-right font-bold text-slate-800">Total Detalhado:</td><td class="px-6 py-3 text-right font-bold text-slate-900">${formatCurrency(total)}</td></tr>`;
+        }
+        function renderDetailedControls(natureza) {
+            const isParcelas = natureza === 'parceladas'; const sortOpts = [ { key: 'valor', label: 'Valor' }, { key: 'descricao', label: 'Descrição' }, ]; if (isParcelas) { sortOpts.push({ key: 'parcelas', label: 'Nº Parcelas' }); }
+            const sortBtns = sortOpts.map(opt => { const isActive = detailedSortState.key === opt.key; const icon = isActive ? (detailedSortState.order === 'asc' ? 'fa-arrow-up' : 'fa-arrow-down') : ''; return `<button data-sort="${opt.key}" class="sort-btn control-btn text-sm font-medium px-3 py-1.5 rounded-md flex items-center gap-2 ${isActive ? 'control-btn-active' : 'bg-slate-100 hover:bg-slate-200'}">${opt.label} <i class="fa-solid ${icon}"></i></button>`; }).join('');
+            const groupBtns = [ { key: 'categoria', label: 'Categoria' }, { key: 'cartao', label: 'Cartão' }, ].map(opt => { const isActive = detailedGroupKey === opt.key; return `<button data-group="${opt.key}" class="group-btn control-btn text-sm font-medium px-3 py-1.5 rounded-md ${isActive ? 'control-btn-active' : 'bg-slate-100 hover:bg-slate-200'}">${opt.label}</button>`; }).join('');
+            detailedAnalysisControls.innerHTML = `<div class="flex items-center gap-2"><span class="text-sm font-medium text-slate-600">Ordenar por:</span>${sortBtns}</div><div class="flex items-center gap-2"><span class="text-sm font-medium text-slate-600">Agrupar por:</span>${groupBtns}</div>`;
+        }
+        function renderDetailedTable(transactions, natureza) {
+            const tableHead = document.getElementById('detailed-analysis-table-head'); const tableBody = document.getElementById('detailed-analysis-table-body'); const tableFooter = document.getElementById('detailed-analysis-table-footer');
+            tableBody.innerHTML = ''; tableFooter.innerHTML = '';
+            const isParcelas = natureza === 'parceladas'; const isAvulsas = natureza === 'avulsas'; const numCols = 4 + (isParcelas || isAvulsas ? 1 : 0);
+            tableHead.innerHTML = `<tr><th scope="col" class="px-6 py-3">Descrição</th><th scope="col" class="px-6 py-3">Categoria</th><th scope="col" class="px-6 py-3">Cartão</th>${isParcelas ? '<th scope="col" class="px-6 py-3">Parcela</th>' : ''}${isAvulsas ? '<th scope="col" class="px-6 py-3">Data</th>' : ''}<th scope="col" class="px-6 py-3 text-right">Valor</th></tr>`;
+            let totalPeriodValue = transactions.reduce((s, t) => s + (parseFloat(t.valor) || 0), 0);
+            let totalEnding = transactions.filter(t => t.installments && t.installments.current === t.installments.total).reduce((s, t) => s + (parseFloat(t.valor) || 0), 0);
+            if (detailedGroupKey === 'none') { transactions.forEach(t => tableBody.appendChild(createRow(t, natureza))); } 
+            else {
+                const groups = transactions.reduce((acc, t) => { let key; if (detailedGroupKey === 'categoria') { key = t.categoria || 'Sem Categoria'; } else if (detailedGroupKey === 'cartao') { const card = cartoes.find(c => c.id === t.cartaoId); key = card ? card.name : 'Outros'; } if (!acc[key]) acc[key] = []; acc[key].push(t); return acc; }, {});
+                Object.keys(groups).sort().forEach(groupName => { const h = document.createElement('tr'); h.className = 'bg-slate-100'; h.innerHTML = `<td colspan="${numCols}" class="px-6 py-2 font-bold text-slate-700">${groupName}</td>`; tableBody.appendChild(h); groups[groupName].forEach(t => tableBody.appendChild(createRow(t, natureza))); });
+            }
+            const totalLabel = { 'fixas': 'Custo Fixo Total:', 'parceladas': 'Total em Parcelas:', 'avulsas': 'Total de Avulsas:' }[natureza]; const colspan = numCols - 1;
+            let footerHTML = `<tr><td colspan="${colspan}" class="px-6 py-3 text-right font-bold text-slate-800">${totalLabel}</td><td class="px-6 py-3 text-right font-bold text-slate-900">${formatCurrency(totalPeriodValue)}</td></tr>`;
+            if (isParcelas && totalEnding > 0) { footerHTML += `<tr><td colspan="${colspan}" class="px-6 py-3 text-right font-semibold text-emerald-800">Valor Liberado (Parcelas Finais):</td><td class="px-6 py-3 text-right font-bold text-emerald-900">${formatCurrency(totalEnding)}</td></tr>`; }
+            tableFooter.innerHTML = footerHTML;
+        }
+        function createRow(t, natureza) {
+            const row = document.createElement('tr'); row.className = 'border-b border-slate-100 hover:bg-slate-50'; const cardName = cartoes.find(c => c.id === t.cartaoId)?.name || 'N/A';
+            let extra = ''; if (natureza === 'parceladas') { extra = `<td class="px-6 py-4">${t.installments.current}/${t.installments.total}</td>`; } else if (natureza === 'avulsas') { extra = `<td class="px-6 py-4">${new Date(t.data + 'T00:00:00').toLocaleDateString('pt-BR')}</td>`; }
+            row.innerHTML = `<td class="px-6 py-4 font-medium text-slate-900">${t.descricao}</td><td class="px-6 py-4">${t.categoria}</td><td class="px-6 py-4">${cardName}</td>${extra}<td class="px-6 py-4 text-right">${formatCurrency(t.valor)}</td>`;
+            return row;
+        }
+        function exportToCSV(transactions, tipos, cartoes) {
+            const headers = ['Descrição', 'Valor', 'Data Vencimento', 'Categoria', 'Tipo', 'Cartão', 'Natureza'];
+            const rows = transactions.filter(t => { const tipo = tipos.find(ti => ti.id === t.tipoId); return tipo && ['Despesa', 'Investimento'].includes(tipo.main); }).map(t => {
+                const tipo = tipos.find(ti => ti.id === t.tipoId); const cartao = cartoes.find(c => c.id === t.cartaoId);
+                let natureza = 'Avulsa'; if (t.recurring) natureza = 'Fixa'; if (t.installments) natureza = 'Parcelada';
+                return [`"${t.descricao}"`, t.valor, t.data, t.categoria || '', tipo ? tipo.name : '', cartao ? cartao.name : '', natureza].join(',');
+            });
+            const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows].join('\n');
+            const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", "projecao_financeira.csv");
+            document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        }
+        async function exportToPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('p', 'mm', 'a4');
+            const loading = document.getElementById('loading-state');
+            loading.innerHTML = '<p class="text-indigo-600 font-semibold">Gerando PDF, por favor aguarde...</p>';
+            loading.style.display = 'block';
 
-            projectionChart = new Chart(ctx, {
-                type: 'bar',
-                data: { labels, datasets },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        x: { stacked: true, grid: { display: false } },
-                        y: { stacked: true, beginAtZero: true, ticks: { callback: (value) => formatCurrency(value) } }
-                    },
-                    plugins: {
-                        legend: { display: datasets.length > 1 },
-                        tooltip: { callbacks: { label: (context) => `${context.dataset.label}: ${formatCurrency(context.raw)}` } },
-                        datalabels: { display: false }
+            try {
+                doc.setFontSize(18);
+                doc.text("Relatório de Projeção Financeira", 14, 22);
+                let currentY = 30;
+
+                if (projectionChart && !projectionView.classList.contains('hidden')) {
+                    const projImgData = projectionChart.toBase64Image('image/png', 1.0);
+                    const pdfWidth = doc.internal.pageSize.getWidth() - 28;
+                    const canvas = document.getElementById('projectionChart');
+                    const projPdfHeight = (canvas.clientHeight * pdfWidth) / canvas.clientWidth;
+                    if (canvas.clientWidth > 0) {
+                        doc.addImage(projImgData, 'PNG', 14, currentY, pdfWidth, projPdfHeight);
+                        currentY += projPdfHeight + 15;
                     }
                 }
-            });
+                
+                const summaryElement = document.getElementById('detailed-analysis-summary');
+                if (!detailedAnalysisView.classList.contains('hidden') && detailedFilterNatureza.value === 'all' && summaryElement.innerHTML.trim() !== '') {
+                    const summaryContent = summaryElement.querySelector(':first-child');
+                    if(summaryContent) {
+                        const summaryImg = await html2canvas(summaryContent);
+                        const pdfWidth = doc.internal.pageSize.getWidth() - 28;
+                        const summaryPdfHeight = (summaryImg.height * pdfWidth) / summaryImg.width;
+                        if (currentY + summaryPdfHeight > doc.internal.pageSize.getHeight() - 20) { doc.addPage(); currentY = 22; }
+                        doc.setFontSize(14); doc.text("Resumo Financeiro do Período", 14, currentY); currentY += 8;
+                        doc.addImage(summaryImg.toDataURL('image/png'), 'PNG', 14, currentY, pdfWidth, summaryPdfHeight);
+                        currentY += summaryPdfHeight + 15;
+                    }
+                }
+                
+                if (detailedAnalysisChart && !detailedAnalysisView.classList.contains('hidden') && detailedFilterNatureza.value !== 'all') {
+                    const analysisImgData = detailedAnalysisChart.toBase64Image('image/png', 1.0);
+                    const pdfWidth = doc.internal.pageSize.getWidth() - 28;
+                    const canvas = document.getElementById('detailedAnalysisChart');
+                    if (canvas.clientWidth > 0) {
+                         if (currentY + ((canvas.clientHeight * pdfWidth) / canvas.clientWidth) > doc.internal.pageSize.getHeight() - 20) { doc.addPage(); currentY = 22; }
+                        doc.setFontSize(14); doc.text("Análise Detalhada por Categoria", 14, currentY); currentY += 8;
+                        const analysisPdfHeight = (canvas.clientHeight * pdfWidth) / canvas.clientWidth;
+                        doc.addImage(analysisImgData, 'PNG', 14, currentY, pdfWidth, analysisPdfHeight);
+                    }
+                }
+
+                doc.save('relatorio_projecao.pdf');
+                
+            } catch (error) {
+                console.error("Erro ao gerar PDF:", error);
+                alert("Ocorreu um erro ao gerar o PDF.");
+            } finally {
+                loading.style.display = 'none';
+            }
         }
-
-        function exportToCSV(transactions, tipos, cartoes) {
-            const headers = ['Descrição', 'Valor', 'Data Vencimento', 'Categoria', 'Tipo', 'Cartão'];
-            const rows = transactions
-                .filter(t => {
-                    const tipo = tipos.find(tipo => tipo.id === t.tipoId);
-                    return tipo && ['Despesa', 'Investimento'].includes(tipo.main) && !t.recurring;
-                })
-                .map(t => {
-                    const tipo = tipos.find(tipo => tipo.id === t.tipoId);
-                    const cartao = cartoes.find(c => c.id === t.cartaoId);
-                    return [
-                        `"${t.descricao}"`,
-                        t.valor,
-                        t.data,
-                        t.categoria || '',
-                        tipo ? tipo.name : '',
-                        cartao ? cartao.name : ''
-                    ].join(',');
-                });
-
-            const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows].join('\n');
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", "projecao_financeira.csv");
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
-
+        main();
     </script>
 </body>
 </html>
